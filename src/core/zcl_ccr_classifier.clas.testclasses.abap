@@ -37,6 +37,8 @@ CLASS ltc_classifier DEFINITION FINAL FOR TESTING
     METHODS when_mixed_levels_then_worst FOR TESTING.
     METHODS when_findings_then_counted FOR TESTING.
     METHODS when_same_name_then_by_type FOR TESTING.
+    METHODS when_no_finding_then_a FOR TESTING.
+    METHODS when_unlisted_then_kept FOR TESTING.
 
 ENDCLASS.
 
@@ -150,6 +152,54 @@ CLASS ltc_classifier IMPLEMENTATION.
       act = lines( object_levels )
       exp = 2
       msg = `Objects of different types are different objects, also with the same name` ).
+  ENDMETHOD.
+
+
+  METHOD when_no_finding_then_a.
+    " ARRANGE
+    DATA(objects) = VALUE zif_ccr_classifier=>object_keys( ( object_type = 'CLAS'
+                                                             object_name = 'ZCL_UNTOUCHED' ) ).
+
+    " ACT
+    DATA(object_levels) = cut->classify( findings = VALUE #( )
+                                         objects  = objects ).
+
+    " ASSERT
+    cl_abap_unit_assert=>assert_equals(
+      act = object_levels
+      exp = VALUE zif_ccr_classifier=>object_levels( ( object_type = 'CLAS'
+                                                       object_name = 'ZCL_UNTOUCHED'
+                                                       level       = zif_ccr_level_rules=>level-a ) )
+      msg = `A checked object without any finding is level A` ).
+  ENDMETHOD.
+
+
+  METHOD when_unlisted_then_kept.
+    " ARRANGE
+    DATA(objects) = VALUE zif_ccr_classifier=>object_keys( ( object_type = 'CLAS'
+                                                             object_name = 'ZCL_LISTED' ) ).
+    DATA(findings) = VALUE zif_ccr_level_rules=>findings(
+      ( finding_of( object_name = 'ZCL_LISTED'
+                    level       = zif_ccr_level_rules=>level-c ) )
+      ( finding_of( object_name = 'ZCL_UNLISTED'
+                    level       = zif_ccr_level_rules=>level-b ) ) ).
+
+    " ACT
+    DATA(object_levels) = cut->classify( findings = findings
+                                         objects  = objects ).
+
+    " ASSERT
+    cl_abap_unit_assert=>assert_equals(
+      act = object_levels
+      exp = VALUE zif_ccr_classifier=>object_levels( ( object_type = 'CLAS'
+                                                       object_name = 'ZCL_LISTED'
+                                                       level       = zif_ccr_level_rules=>level-c
+                                                       findings_c  = 1 )
+                                                     ( object_type = 'CLAS'
+                                                       object_name = 'ZCL_UNLISTED'
+                                                       level       = zif_ccr_level_rules=>level-b
+                                                       findings_b  = 1 ) )
+      msg = `A listed object takes the level of its findings, an unlisted object with findings is kept` ).
   ENDMETHOD.
 
 ENDCLASS.
