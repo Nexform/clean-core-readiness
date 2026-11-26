@@ -15,9 +15,11 @@ CLASS zcl_ccr_classifier DEFINITION
   PRIVATE SECTION.
     DATA rules TYPE REF TO zif_ccr_level_rules.
 
+    "! The object is a row of a sorted table: its key is write-protected, so the row is handed
+    "! over as a reference and never as a whole to a CHANGING parameter.
     METHODS count_finding
       IMPORTING level  TYPE zif_ccr_level_rules=>clean_core_level
-      CHANGING  object TYPE zif_ccr_classifier=>object_level.
+                object TYPE REF TO zif_ccr_classifier=>object_level.
 
 ENDCLASS.
 
@@ -31,15 +33,15 @@ CLASS zcl_ccr_classifier IMPLEMENTATION.
 
   METHOD zif_ccr_classifier~classify.
     LOOP AT findings REFERENCE INTO DATA(finding).
-      ASSIGN result[ object_type = finding->object_type
-                     object_name = finding->object_name ] TO FIELD-SYMBOL(<object>).
-      IF sy-subrc <> 0.
+      IF NOT line_exists( result[ object_type = finding->object_type
+                                  object_name = finding->object_name ] ).
         INSERT VALUE #( object_type = finding->object_type
                         object_name = finding->object_name
-                        level       = zif_ccr_level_rules=>level-a ) INTO TABLE result ASSIGNING <object>.
+                        level       = zif_ccr_level_rules=>level-a ) INTO TABLE result.
       ENDIF.
-      count_finding( EXPORTING level  = rules->level_of( finding->* )
-                     CHANGING  object = <object> ).
+      count_finding( level  = rules->level_of( finding->* )
+                     object = REF #( result[ object_type = finding->object_type
+                                             object_name = finding->object_name ] ) ).
     ENDLOOP.
   ENDMETHOD.
 
@@ -47,18 +49,18 @@ CLASS zcl_ccr_classifier IMPLEMENTATION.
   METHOD count_finding.
     CASE level.
       WHEN zif_ccr_level_rules=>level-b.
-        object-findings_b += 1.
+        object->findings_b += 1.
       WHEN zif_ccr_level_rules=>level-c.
-        object-findings_c += 1.
+        object->findings_c += 1.
       WHEN zif_ccr_level_rules=>level-d.
-        object-findings_d += 1.
+        object->findings_d += 1.
       WHEN OTHERS.
         " a finding outside clean core leaves the object at its level
         RETURN.
     ENDCASE.
 
-    IF level > object-level.
-      object-level = level.
+    IF level > object->level.
+      object->level = level.
     ENDIF.
   ENDMETHOD.
 
