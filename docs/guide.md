@@ -1,7 +1,5 @@
 # Clean Core Readiness: a short guide
 
-Nov 26, 2026 · @George Drakos
-
 ## What readiness means
 
 A system is clean core ready when you know, for every custom object, its clean core level and whether anyone still uses it. The level comes from ATC; the usage comes from SUSG. Everything below serves those two answers.
@@ -113,8 +111,6 @@ Opened and read:
 
 - [Configuring the ABAP Test Cockpit and Transport Gate in SAP S/4HANA](https://blog.sap-press.com/configuring-the-abap-test-cockpit-and-transport-gate-in-sap-s4hana), SAP PRESS: notes, check parameters, offline upload, priority per level.
 - [SAP/abap-atc-cr-cv-s4hc](https://github.com/SAP/abap-atc-cr-cv-s4hc), SAP on GitHub: the classification files and the notes they need.
-
-Read as search extracts only, because the pages did not load:
 
 - [ABAP test cockpit (ATC) recommendations for governance of clean core ABAP development](https://community.sap.com/t5/technology-blog-posts-by-sap/abap-test-cockpit-atc-recommendations-for-governance-of-clean-core-abap/ba-p/14186130), SAP: the four checks, the delivered variant, the message type per kind of usage.
 - [Project Kernseife](https://community.sap.com/t5/technology-blog-posts-by-sap/project-kernseife-improving-the-measurement-of-clean-core-in-abap/ba-p/14099819), SAP: when the check and the levels were released.
