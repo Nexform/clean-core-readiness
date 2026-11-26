@@ -20,3 +20,9 @@ All notable changes to this project are listed here. The format follows
 - Workflow `unit`: the ABAP Unit tests of `src/core` run off-stack on every pull request.
 - Probe program `Z_CCR_PROBE` that confirms the ATC and SUSG interfaces of a system.
 - Guide to the method: `docs/guide.md`.
+
+### Fixed
+
+- `ZCL_CCR_CLASSIFIER` raised `CX_SY_DYN_CALL_ILLEGAL_TYPE` in a system: it passed a row of a
+  sorted table to a CHANGING parameter. The row is now handed over as a reference. The
+  off-stack tests had not shown it, because the transpiler does not protect table keys.
