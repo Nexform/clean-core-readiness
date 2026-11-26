@@ -3,7 +3,7 @@
 *#      |\\/\\//\|        -----------------------------------      #*
 *#      |        |       /      Report: Z_CCR_READINESS      \     #*
 *#      |  (*) (*)      /                                     \    #*
-*#      |       __)    /        Version: 1.0 ()                \   #*
+*#      |       __)    /        Version: 1.1 ()                \   #*
 *#     (C    _____\   /         Magic. Do not touch.            \  #*
 *#       \  (__(   --{-------------------------------------------} #*
 *#       |    /       \         Created By : George Drakos      /  #*
@@ -21,6 +21,12 @@
 *& Description    : Clean core readiness of custom objects: level A-D *
 *&                  from an ATC run, usage from SUSG, a proposal per   *
 *&                  object (keep, remediate, retire). Read-only.       *
+*& Author         : George Drakos                                      *
+*& Date           : 26/11/2026                                         *
+*& Change Request :                                                    *
+*&--------------------------------------------------------------------&*
+*& Description    : Value helps: ID columns with a dictionary type;    *
+*&                  failure of the value help told apart from no values*
 *& Author         : George Drakos                                      *
 *& Date           : 26/11/2026                                         *
 *& Change Request :                                                    *
@@ -46,7 +52,8 @@ CLASS lcl_value_help DEFINITION FINAL CREATE PUBLIC.
     CLASS-METHODS choose_data_set.
 
   PRIVATE SECTION.
-    TYPES hex_id TYPE c LENGTH 32.
+    "! The value help reads its columns from the dictionary, so the ID column has a dictionary type
+    TYPES hex_id TYPE sysuuid_c32.
     TYPES: BEGIN OF run_value,
              result_id    TYPE hex_id,
              title        TYPE satc_ac_resulth-title,
@@ -130,10 +137,10 @@ CLASS lcl_application DEFINITION FINAL CREATE PUBLIC.
   PUBLIC SECTION.
     TYPES: BEGIN OF screen_selection,
              check_variant TYPE zif_ccr_atc_reader=>check_variant,
-             run_id        TYPE c LENGTH 32,
+             run_id        TYPE sysuuid_c32,
              packages      TYPE zif_ccr_atc_reader=>package_range,
              object_types  TYPE zif_ccr_atc_reader=>object_type_range,
-             usage_id      TYPE c LENGTH 32,
+             usage_id      TYPE sysuuid_c32,
            END OF screen_selection.
 
     METHODS constructor
@@ -167,13 +174,13 @@ ENDCLASS.
 *&---------------------------------------------------------------------*
 SELECTION-SCREEN BEGIN OF BLOCK b01 WITH FRAME TITLE TEXT-b01.
 PARAMETERS p_chkv TYPE satc_ac_resulth-chk_profile_name DEFAULT 'ABAP_CLEAN_CORE_DEVELOPMENT' OBLIGATORY.
-PARAMETERS p_run TYPE c LENGTH 32 OBLIGATORY.
+PARAMETERS p_run TYPE sysuuid_c32 OBLIGATORY.
 SELECT-OPTIONS s_pack FOR package_name OBLIGATORY.
 SELECT-OPTIONS s_type FOR object_type.
 SELECTION-SCREEN END OF BLOCK b01.
 
 SELECTION-SCREEN BEGIN OF BLOCK b02 WITH FRAME TITLE TEXT-b02.
-PARAMETERS p_usage TYPE c LENGTH 32 OBLIGATORY.
+PARAMETERS p_usage TYPE sysuuid_c32 OBLIGATORY.
 SELECTION-SCREEN END OF BLOCK b02.
 
 *&---------------------------------------------------------------------*
@@ -281,9 +288,14 @@ CLASS lcl_value_help IMPLEMENTATION.
         parameter_error = 1
         no_values_found = 2
         OTHERS          = 3.
-    IF sy-subrc <> 0.
-      MESSAGE TEXT-e04 TYPE 'S' DISPLAY LIKE 'E'.
-    ENDIF.
+    CASE sy-subrc.
+      WHEN 0.
+        RETURN.
+      WHEN 2.
+        MESSAGE TEXT-e04 TYPE 'S' DISPLAY LIKE 'E'.
+      WHEN OTHERS.
+        MESSAGE |{ TEXT-e05 } { sy-subrc }| TYPE 'S' DISPLAY LIKE 'E'.
+    ENDCASE.
   ENDMETHOD.
 
 ENDCLASS.

@@ -43,3 +43,8 @@ All notable changes to this project are listed here. The format follows
   sorted table to a CHANGING parameter. The row is now handed over as a reference. The
   off-stack tests had not shown it, because the transpiler does not protect table keys.
 - `Z_CCR_PROBE` masks fields named `RESP*` as user names.
+- `Z_CCR_READINESS`: the value helps of run and usage data set failed. Their ID column had a
+  built-in type; the value help reads its columns from the dictionary, so the ID has the type
+  `SYSUUID_C32` now. A failing value help shows its return code instead of "No values".
+- `Z_CCR_READINESS`: the length of the selection texts in the program XML is the one the
+  system writes (text plus 8), so abapGit shows no difference after a pull.
