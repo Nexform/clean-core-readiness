@@ -108,6 +108,12 @@
     </item>
     <item>
      <ID>I</ID>
+     <KEY>E05</KEY>
+     <ENTRY>The value help failed, return code</ENTRY>
+     <LENGTH>34</LENGTH>
+    </item>
+    <item>
+     <ID>I</ID>
      <KEY>H01</KEY>
      <ENTRY>ATC run</ENTRY>
      <LENGTH>7</LENGTH>
@@ -127,31 +133,31 @@
      <ID>S</ID>
      <KEY>P_CHKV</KEY>
      <ENTRY>        Check variant</ENTRY>
-     <LENGTH>21</LENGTH>
+     <LENGTH>29</LENGTH>
     </item>
     <item>
      <ID>S</ID>
      <KEY>P_RUN</KEY>
      <ENTRY>        ATC run (F4)</ENTRY>
-     <LENGTH>20</LENGTH>
+     <LENGTH>28</LENGTH>
     </item>
     <item>
      <ID>S</ID>
      <KEY>P_USAGE</KEY>
      <ENTRY>        Usage data set (F4)</ENTRY>
-     <LENGTH>27</LENGTH>
+     <LENGTH>35</LENGTH>
     </item>
     <item>
      <ID>S</ID>
      <KEY>S_PACK</KEY>
      <ENTRY>        Packages of the run</ENTRY>
-     <LENGTH>27</LENGTH>
+     <LENGTH>35</LENGTH>
     </item>
     <item>
      <ID>S</ID>
      <KEY>S_TYPE</KEY>
      <ENTRY>        Object types</ENTRY>
-     <LENGTH>20</LENGTH>
+     <LENGTH>28</LENGTH>
     </item>
    </TPOOL>
   </asx:values>
