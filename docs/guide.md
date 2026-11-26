@@ -6,14 +6,14 @@ A system is clean core ready when you know, for every custom object, its clean c
 
 SAP sorts custom code into four levels by what it touches in the SAP standard:
 
-| Level | The custom code uses | ATC reports |
+| Level | The custom code uses | Finding of "Usage of APIs" |
 | --- | --- | --- |
-| A | Released APIs only (ABAP Cloud) | No finding |
-| B | Classic APIs that SAP has classified as such | Information, priority 3 |
-| C | SAP internal objects with no classification, for example a direct read of an SAP table | Warning, priority 2 |
-| D | Not recommended techniques: modifications, writes to SAP tables, objects marked noAPI | Error, priority 1 |
+| A | Released APIs only (ABAP Cloud) | None |
+| B | Classic or deprecated APIs that SAP has classified as such | Note (message kind N) |
+| C | SAP internal objects with no classification, for example a direct read of an SAP table | Warning (kind W) |
+| D | Not recommended techniques: writes to SAP tables, objects marked noAPI, `PERFORM` in SAP programs | Error (kind E) |
 
-An object takes the level of its worst finding. The guide treats this as the working rule; see the open points.
+An object takes the level of its worst finding. On S/4HANA 2025 the result has no field for the level; it follows from the message kind of the check "Usage of APIs" (check class `CL_YCM_CC_CHECK_API_USAGE`). With the delivered priorities, kind E shows as priority 1, W as 2, N as 3, but the priority can be changed per variant, so read the kind.
 
 ## What you need
 
@@ -51,12 +51,15 @@ Start with one small package whose content you know. Widen to all custom code on
 
 ## Read the result
 
-You derive the level from the priority of the findings; the sources show no separate field for it in the result.
+You derive the level from the message kind of the clean core findings; the result has no separate field for it. The report `Z_CCR_READINESS` of this repository does the following steps for you.
 
-1. Keep only the findings of the four clean core checks. The variant also carries the general ABAP Cloud checks, and their findings say nothing about the level.
-2. Group the findings by custom object.
-3. Take the highest priority per object: priority 1 gives D, priority 2 gives C, priority 3 gives B.
-4. An object that was checked and has no clean core finding is A.
+1. Keep only the findings of the clean core checks. The variant also carries the general ABAP Cloud checks (extended check, `SELECT` without `ORDER BY` and others), and their findings say nothing about the level. On the test system all priority 1 findings came from such checks.
+2. Leave out the technical messages of "Usage of APIs" (object usage found, data provider errors).
+3. Group the findings by custom object.
+4. Take the worst kind per object: error gives D, warning gives C, note gives B.
+5. An object that was checked and has no clean core finding is A. The result does not list the checked objects, so take them from the packages of the run.
+
+Each finding of "Usage of APIs" names the SAP object it uses (attributes `REF_OBJ_TYPE`, `REF_OBJ_NAME`, `REF_PACKAGE`) and, for codes ending in `_SUC`, its successor (`ADD_INFO`). That is where remediation starts.
 
 Two totals describe the system: the number of objects per level, and the same count for objects in use. The second one is the number that matters for planning.
 
@@ -71,14 +74,17 @@ Usage comes from transaction `SUSG`, which aggregates the call records of the AB
 - It must have been collecting long enough to cover a full business year, year-end closing included. Shorter periods mark periodic programs as unused.
 - The data lives in production, the ATC result usually in development. Bring the usage data to the system where you assess.
 
+SUSG keeps usage per procedure (method, function module, form) with the repository object on every row, but only for classes, function groups and programs. CDS views, behavior definitions, interfaces and enhancements have no usage data: their usage is unknown, not zero.
+
 Join usage and level per object, then apply one rule:
 
 |  | Level A or B | Level C | Level D |
 | --- | --- | --- | --- |
 | **Used** | Keep | Remediate | Remediate first |
+| **Usage unknown** | Keep | Remediate | Remediate first |
 | **Not used** | Retire | Retire | Retire |
 
-This rule is the proposal of this project, not an SAP rule. Treat Retire as a candidate list: confirm with the owner before anything is deleted.
+This rule is the proposal of this project, not an SAP rule. Treat Retire as a candidate list: confirm with the owner before anything is deleted. Some objects cannot be retired alone: the behavior pool class of a RAP business object goes with its behavior definition.
 
 ## Pitfalls
 
@@ -92,14 +98,21 @@ A result with zero findings on classic code usually means nothing was checked, n
 | Errors only, or no information findings | The classification file is not read | `classicAPIDataSource` in the Usage of APIs check |
 | Priority 1 on data elements and domains | The old three-tier checks are still in the variant | Rebuild the variant from the four clean core checks |
 | Findings look incomplete | Dependent notes are missing | Rerun the Note Analyzer, also after each support package |
+| The newest run has no clean core finding | It is a small run started from ADT, stored next to the run series | Choose the run series result explicitly |
+| Many objects not used | Local usage data of a development system, or a short period | Use usage data imported from production, a full year |
 
 ## Open points
 
-On a system, only the delivered variant and the run series screen have been seen so far; the rest of this guide rests on SAP and community sources. These points decide the method and are still marked verify:
+Confirmed on S/4HANA 2025 Private Edition with the probe program of this repository (`probes/z_ccr_probe.prog.abap`):
 
-- [ ] The ATC result has no field for the clean core level, so priority is the only carrier.
-- [ ] Priority 1, 2 and 3 map to D, C and B for all four checks, not only for Usage of APIs.
-- [ ] SUSG keeps usage per procedure (method, function module) and not only per program.
+- [x] The ATC result has no field for the clean core level; it follows from check and message kind.
+- [x] SUSG keeps usage per procedure, with the repository object on every row, for classes, function groups and programs only.
+- [x] An ATC result does not keep the list of objects it checked.
+
+Still marked verify:
+
+- [ ] Note, warning and error map to B, C and D for all four checks, not only for "Usage of APIs". The check classes of the other three checks were not found on the test system.
+- [ ] Whether exempted findings are part of the result the API returns.
 - [ ] How SUSG data from production reaches the assessment system: snapshot, export or remote API.
 - [ ] The menu names in transaction `ATC` on S/4HANA 2025.
 - [ ] Whether the delivered variant lets you change `classicAPIDataSource`, or a copy is needed.
