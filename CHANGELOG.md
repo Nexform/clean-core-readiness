@@ -21,6 +21,9 @@ All notable changes to this project are listed here. The format follows
   runs of a check variant, read the findings of one run through the classic ATC API and read
   the objects of the checked packages and their subpackages from TADIR (an ATC result does
   not list the objects it checked).
+- Usage reader: `ZIF_CCR_USAGE_READER` and its adapter `ZCL_CCR_USAGE_READER` list the usage
+  data sets of SUSG with their period and sum the executions and the last use of the checked
+  objects in one data set, in the database.
 - `ZCL_CCR_CLASSIFIER` takes the checked objects too: an object without any finding is level A.
 - Workflow `unit`: the ABAP Unit tests of `src/core` run off-stack on every pull request.
 - Probe program `Z_CCR_PROBE` that confirms the ATC and SUSG interfaces of a system.
