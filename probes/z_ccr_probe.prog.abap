@@ -3,7 +3,7 @@
 *#      |\\/\\//\|        -----------------------------------      #*
 *#      |        |       /      Report: Z_CCR_PROBE          \     #*
 *#      |  (*) (*)      /                                     \    #*
-*#      |       __)    /        Version: 1.1 ()                \   #*
+*#      |       __)    /        Version: 1.2 ()                \   #*
 *#     (C    _____\   /         Magic. Do not touch.            \  #*
 *#       \  (__(   --{-------------------------------------------} #*
 *#       |    /       \         Created By : George Drakos      /  #*
@@ -21,6 +21,14 @@
 *& Description    : Result key RAW(16) compared as host variable; FOR  *
 *&                  variable of NOTE_CONDITION renamed, NOTE is the one*
 *&                  of START-OF-SELECTION                              *
+*& Author         : George Drakos                                      *
+*& Date           : 26/11/2026                                         *
+*& Change Request :                                                    *
+*&--------------------------------------------------------------------&*
+*& Description    : Probe D for slice 3 - finding attributes, checks of*
+*&                  the clean core variant, stored content of a run;   *
+*&                  user mask covers RESP fields; probes A-C off by    *
+*&                  default                                            *
 *& Author         : George Drakos                                      *
 *& Date           : 26/11/2026                                         *
 *& Change Request :                                                    *
@@ -111,7 +119,7 @@ CLASS lcl_output DEFINITION FINAL CREATE PUBLIC.
     CONSTANTS max_value_length TYPE i VALUE 120.
     "! A row with up to this many columns is shown in full, initial values included.
     CONSTANTS full_row_width TYPE i VALUE 4.
-    CONSTANTS user_field_pattern TYPE string VALUE `USER|UNAME|AUTHOR|OWNER|CONTACT|RESPONS|BY$`.
+    CONSTANTS user_field_pattern TYPE string VALUE `USER|UNAME|AUTHOR|OWNER|CONTACT|RESP|BY$`.
     CONSTANTS line_break_pattern TYPE string VALUE `[\t\r\n]`.
     CONSTANTS text_file_type TYPE c LENGTH 3 VALUE 'ASC'.
     CONSTANTS utf8_codepage TYPE c LENGTH 4 VALUE '4110'.
@@ -426,6 +434,131 @@ CLASS lcl_usage_probe DEFINITION FINAL CREATE PUBLIC.
 ENDCLASS.
 
 *&----------------------------------------------------------------------*
+*&CLASS lcl_reader_probe DEFINITION
+*&----------------------------------------------------------------------*
+"! Questions of slice 3 - what the ATC reader needs beyond the findings: the referenced object of a
+"! finding, the checks and message codes of the clean core variant and the objects a run checked.
+CLASS lcl_reader_probe DEFINITION FINAL CREATE PUBLIC.
+
+  PUBLIC SECTION.
+    INTERFACES lif_probe.
+
+    TYPES: BEGIN OF reader_settings,
+             result_id     TYPE string,
+             check_variant TYPE string,
+             sample_size   TYPE i,
+           END OF reader_settings.
+
+    METHODS constructor
+      IMPORTING output   TYPE REF TO lcl_output
+                catalog  TYPE REF TO lcl_catalog
+                settings TYPE reader_settings.
+
+  PRIVATE SECTION.
+    TYPES sample_keys TYPE SORTED TABLE OF string WITH UNIQUE KEY table_line.
+    TYPES: BEGIN OF tag_count,
+             tag         TYPE string,
+             occurrences TYPE i,
+           END OF tag_count.
+    TYPES tag_counts TYPE SORTED TABLE OF tag_count WITH UNIQUE KEY tag.
+
+    CONSTANTS: BEGIN OF api,
+                 variant         TYPE c LENGTH 30 VALUE 'CL_SATC_API_CHECK_VARIANT',
+                 variant_name    TYPE c LENGTH 30 VALUE 'NAME',
+                 check_messages  TYPE c LENGTH 30 VALUE 'GET_CHECK_MESSAGES',
+                 checks          TYPE c LENGTH 30 VALUE 'CHECKS_WITH_PRIORITIES',
+                 mappings        TYPE c LENGTH 30 VALUE 'CL_SATC_API_MAPPINGS',
+                 extract         TYPE c LENGTH 30 VALUE 'EXTRACT_ATTRIBUTES',
+                 finding         TYPE c LENGTH 30 VALUE 'FINDING',
+                 attributes      TYPE c LENGTH 30 VALUE 'ATTRIBUTES',
+                 newer_api       TYPE c LENGTH 30 VALUE 'CL_SATC_API',
+                 create_factory  TYPE c LENGTH 30 VALUE 'CREATE_API_FACTORY',
+                 message_table   TYPE c LENGTH 30 VALUE 'SCIMESSAGES',
+               END OF api.
+    CONSTANTS section_name TYPE string VALUE `D READER`.
+    CONSTANTS clean_core_checks TYPE string VALUE `CL_YCM_CC*`.
+    CONSTANTS class_type TYPE string VALUE `CLAS`.
+    CONSTANTS tag_pattern TYPE string VALUE `<([A-Za-z_][\w.:-]*)`.
+    "! Value of an XML element whose name points to a user - masked before the text is shown.
+    CONSTANTS user_element_pattern TYPE string
+              VALUE `(?i)(<[\w.:-]*(USER|UNAME|AUTHOR|OWNER|CONTACT|RESP|BY)[\w.:-]*>)[^<]*`.
+    CONSTANTS masked_element TYPE string VALUE `$1***`.
+    CONSTANTS max_samples TYPE i VALUE 40.
+    CONSTANTS max_nested_rows TYPE i VALUE 100.
+    CONSTANTS max_messages TYPE i VALUE 120.
+    CONSTANTS max_tags TYPE i VALUE 150.
+    CONSTANTS max_text_chunks TYPE i VALUE 25.
+    CONSTANTS text_chunk_length TYPE i VALUE 200.
+    CONSTANTS max_named_objects TYPE i VALUE 5.
+
+    DATA output TYPE REF TO lcl_output.
+    DATA catalog TYPE REF TO lcl_catalog.
+    DATA settings TYPE reader_settings.
+
+    METHODS choose_result.
+    METHODS report_signatures.
+    METHODS report_variant_checks.
+    METHODS report_check_classes.
+
+    METHODS report_messages_of
+      IMPORTING check_class TYPE csequence.
+
+    METHODS report_classic_attributes
+      IMPORTING findings TYPE scit_rest.
+
+    METHODS one_per_code
+      IMPORTING findings      TYPE scit_rest
+      RETURNING VALUE(result) TYPE scit_rest.
+
+    "! Calls the mapping as instance method when an instance is given, as static method otherwise.
+    METHODS attributes_of
+      IMPORTING mappings      TYPE REF TO object
+                finding       TYPE REF TO scir_rest
+      RETURNING VALUE(result) TYPE if_satc_api_result=>ty_attributes.
+
+    METHODS report_api_attributes.
+
+    METHODS api_one_per_code
+      IMPORTING findings      TYPE if_satc_api_result=>ty_findings
+      RETURNING VALUE(result) TYPE if_satc_api_result=>ty_findings.
+
+    METHODS api_findings
+      RETURNING VALUE(result) TYPE if_satc_api_result=>ty_findings
+      RAISING   cx_static_check.
+
+    METHODS report_result_content
+      IMPORTING findings TYPE scit_rest.
+
+    METHODS some_object_names
+      IMPORTING findings      TYPE scit_rest
+      RETURNING VALUE(result) TYPE sample_keys.
+
+    METHODS report_content
+      IMPORTING subject      TYPE csequence
+                xml          TYPE string
+                object_names TYPE sample_keys.
+
+    METHODS read_findings
+      RETURNING VALUE(result) TYPE scit_rest
+      RAISING   cx_static_check.
+
+    "! Adds the rows of a table and, for each row, the rows of every table inside it.
+    METHODS add_nested
+      IMPORTING subject TYPE csequence
+                rows    TYPE ANY TABLE.
+
+    "! Elementary value as text; a flat structure as its elementary components joined by '/'.
+    METHODS text_of
+      IMPORTING value         TYPE any
+      RETURNING VALUE(result) TYPE string.
+
+    METHODS count_tags
+      IMPORTING xml           TYPE string
+      RETURNING VALUE(result) TYPE tag_counts.
+
+ENDCLASS.
+
+*&----------------------------------------------------------------------*
 *&CLASS lcl_application DEFINITION
 *&----------------------------------------------------------------------*
 "! Composition root of the program: wires the probes the selection screen asks for and runs them.
@@ -439,6 +572,8 @@ CLASS lcl_application DEFINITION FINAL CREATE PUBLIC.
              result_id      TYPE string,
              reads_messages TYPE abap_bool,
              probes_usage   TYPE abap_bool,
+             probes_reader  TYPE abap_bool,
+             check_variant  TYPE string,
              sample_size    TYPE i,
              masks_users    TYPE abap_bool,
              file_path      TYPE string,
@@ -476,7 +611,7 @@ ENDCLASS.
 *&---------------------------------------------------------------------*
 SELECTION-SCREEN BEGIN OF BLOCK sc_batc WITH FRAME TITLE sc_tatc.
 SELECTION-SCREEN BEGIN OF LINE.
-PARAMETERS p_atc AS CHECKBOX DEFAULT 'X'.
+PARAMETERS p_atc AS CHECKBOX.
 SELECTION-SCREEN COMMENT 3(66) sc_catc FOR FIELD p_atc.
 SELECTION-SCREEN END OF LINE.
 SELECTION-SCREEN COMMENT /1(70) sc_cres.
@@ -489,19 +624,28 @@ SELECTION-SCREEN END OF BLOCK sc_batc.
 
 SELECTION-SCREEN BEGIN OF BLOCK sc_busg WITH FRAME TITLE sc_tusg.
 SELECTION-SCREEN BEGIN OF LINE.
-PARAMETERS p_susg AS CHECKBOX DEFAULT 'X'.
+PARAMETERS p_susg AS CHECKBOX.
 SELECTION-SCREEN COMMENT 3(66) sc_cusg FOR FIELD p_susg.
 SELECTION-SCREEN END OF LINE.
 SELECTION-SCREEN END OF BLOCK sc_busg.
 
 SELECTION-SCREEN BEGIN OF BLOCK sc_brel WITH FRAME TITLE sc_trel.
 SELECTION-SCREEN BEGIN OF LINE.
-PARAMETERS p_rel AS CHECKBOX DEFAULT 'X'.
+PARAMETERS p_rel AS CHECKBOX.
 SELECTION-SCREEN COMMENT 3(66) sc_crel FOR FIELD p_rel.
 SELECTION-SCREEN END OF LINE.
 SELECTION-SCREEN COMMENT /1(70) sc_cnote.
 SELECT-OPTIONS s_note FOR note_number NO INTERVALS.
 SELECTION-SCREEN END OF BLOCK sc_brel.
+
+SELECTION-SCREEN BEGIN OF BLOCK sc_brdr WITH FRAME TITLE sc_trdr.
+SELECTION-SCREEN BEGIN OF LINE.
+PARAMETERS p_rdr AS CHECKBOX DEFAULT 'X'.
+SELECTION-SCREEN COMMENT 3(66) sc_crdr FOR FIELD p_rdr.
+SELECTION-SCREEN END OF LINE.
+SELECTION-SCREEN COMMENT /1(70) sc_cchkv.
+PARAMETERS p_chkv TYPE c LENGTH 30 DEFAULT 'ABAP_CLEAN_CORE_DEVELOPMENT'.
+SELECTION-SCREEN END OF BLOCK sc_brdr.
 
 SELECTION-SCREEN BEGIN OF BLOCK sc_bout WITH FRAME TITLE sc_tout.
 SELECTION-SCREEN COMMENT /1(70) sc_crows.
@@ -536,6 +680,8 @@ START-OF-SELECTION.
                                 result_id      = p_resid
                                 reads_messages = p_msgs
                                 probes_usage   = p_susg
+                                probes_reader  = p_rdr
+                                check_variant  = p_chkv
                                 sample_size    = p_rows
                                 masks_users    = p_mask
                                 file_path      = p_file )
@@ -1433,6 +1579,417 @@ CLASS lcl_usage_probe IMPLEMENTATION.
 ENDCLASS.
 
 *&----------------------------------------------------------------------*
+*&CLASS lcl_reader_probe IMPLEMENTATION
+*&----------------------------------------------------------------------*
+CLASS lcl_reader_probe IMPLEMENTATION.
+
+  METHOD constructor.
+    me->output   = output.
+    me->catalog  = catalog.
+    me->settings = settings.
+  ENDMETHOD.
+
+  METHOD lif_probe~run.
+    output->begin_section( section_name ).
+    report_signatures( ).
+    report_variant_checks( ).
+    report_check_classes( ).
+
+    choose_result( ).
+    IF settings-result_id IS INITIAL.
+      RETURN.
+    ENDIF.
+
+    TRY.
+        DATA(findings) = read_findings( ).
+      CATCH cx_root INTO DATA(failure).
+        " without findings the questions about one run have no answer
+        output->add_failure( subject = `FINDINGS`
+                             failure = failure ).
+        RETURN.
+    ENDTRY.
+    output->add( subject = `FINDINGS`
+                 item    = lcl_output=>label-row_count
+                 content = |{ lines( findings ) }| ).
+
+    report_classic_attributes( findings ).
+    report_api_attributes( ).
+    report_result_content( findings ).
+  ENDMETHOD.
+
+  METHOD report_signatures.
+    DATA(classes) = `'CL_SATC_API_FACTORY', 'IF_SATC_RESULT_ACCESS', 'CL_SATC_API_MAPPINGS', ` &&
+                    `'CL_SATC_API_CHECK_VARIANT', 'CL_SATC_API', 'IF_SATC_API_FACTORY', 'IF_SATC_API_RESULT'`.
+
+    catalog->run_query( VALUE #( subject    = `Exceptions (SEOSUBCOEX)`
+                                 source     = `SEOSUBCOEX`
+                                 field_list = `CLSNAME, CMPNAME, SCONAME`
+                                 condition  = |CLSNAME IN ( { classes } )|
+                                 sort_order = `CLSNAME, CMPNAME, SCONAME`
+                                 max_rows   = max_nested_rows ) ).
+    catalog->run_query( VALUE #( subject    = `Instantiation (SEOCLASSDF)`
+                                 source     = `SEOCLASSDF`
+                                 field_list = `CLSNAME, VERSION, EXPOSURE, CLSFINAL, STATE`
+                                 condition  = |CLSNAME IN ( { classes } )|
+                                 sort_order = `CLSNAME, VERSION`
+                                 max_rows   = max_nested_rows ) ).
+    catalog->run_query( VALUE #( subject    = `Result ID types (DD04L)`
+                                 source     = `DD04L`
+                                 field_list = `ROLLNAME, DOMNAME, DATATYPE, LENG`
+                                 condition  = `ROLLNAME IN ( 'SATC_D_RESULT_ID', 'SATC_D_ID', 'SATC_D_AC_DISPLAY_ID' )`
+                                 sort_order = `ROLLNAME`
+                                 max_rows   = max_nested_rows ) ).
+  ENDMETHOD.
+
+  METHOD report_variant_checks.
+    DATA variant TYPE REF TO object.
+    DATA name TYPE if_satc_api_factory=>ty_check_variant_name.
+    DATA checks TYPE cl_satc_api_check_variant=>ty_checks_with_msg_priorities.
+
+    DATA(subject) = |{ api-variant } { settings-check_variant }|.
+    name = settings-check_variant.
+    DATA(construction) = VALUE abap_parmbind_tab( ( name  = api-variant_name
+                                                    kind  = cl_abap_objectdescr=>exporting
+                                                    value = REF #( name ) ) ).
+    DATA(messages_call) = VALUE abap_parmbind_tab( ( name  = api-checks
+                                                     kind  = cl_abap_objectdescr=>returning
+                                                     value = REF #( checks ) ) ).
+    TRY.
+        " created by name: whether the class may be instantiated outside its package is a question here
+        CREATE OBJECT variant TYPE (api-variant) PARAMETER-TABLE construction.
+        CALL METHOD variant->(api-check_messages) PARAMETER-TABLE messages_call.
+        add_nested( subject = subject
+                    rows    = checks ).
+      CATCH cx_root INTO DATA(failure).
+        output->add_failure( subject = subject
+                             failure = failure ).
+    ENDTRY.
+  ENDMETHOD.
+
+  METHOD report_check_classes.
+    DATA(names) = catalog->object_names(
+                      VALUE #( names        = lcl_catalog=>names_like( VALUE #( ( clean_core_checks ) ) )
+                               object_types = lcl_catalog=>types_of( VALUE #( ( class_type ) ) ) ) ).
+    output->add( subject = |Classes { clean_core_checks }|
+                 item    = lcl_output=>label-row_count
+                 content = |{ lines( names ) }| ).
+
+    LOOP AT names INTO DATA(name).
+      DATA(class_descriptor) = catalog->object_descriptor( name ).
+      " only a check class carries a message catalog
+      IF class_descriptor IS NOT BOUND
+         OR NOT line_exists( class_descriptor->attributes[ name = api-message_table ] ).
+        CONTINUE.
+      ENDIF.
+      report_messages_of( name ).
+    ENDLOOP.
+  ENDMETHOD.
+
+  METHOD report_messages_of.
+    DATA check_instance TYPE REF TO object.
+    FIELD-SYMBOLS <messages> TYPE ANY TABLE.
+
+    DATA(subject) = |{ check_class }->{ api-message_table }|.
+    TRY.
+        CREATE OBJECT check_instance TYPE (check_class).
+        ASSIGN check_instance->(api-message_table) TO <messages>.
+        IF sy-subrc <> 0.
+          output->add( subject = subject
+                       item    = lcl_output=>label-missing ).
+          RETURN.
+        ENDIF.
+        output->add_rows( subject  = subject
+                          rows     = <messages>
+                          max_rows = max_messages ).
+      CATCH cx_root INTO DATA(failure).
+        " an abstract check class cannot be created - its subclasses carry the messages
+        output->add_failure( subject = subject
+                             failure = failure ).
+    ENDTRY.
+  ENDMETHOD.
+
+  METHOD choose_result.
+    IF settings-result_id IS NOT INITIAL.
+      output->add( subject = `RESULT`
+                   item    = `from P_RESID`
+                   content = settings-result_id ).
+      RETURN.
+    ENDIF.
+
+    DATA(check_variant) = CONV satc_ac_resulth-chk_profile_name( settings-check_variant ).
+    SELECT FROM satc_ac_resulth
+      FIELDS display_id, title, scheduled_on_ts
+      WHERE chk_profile_name = @check_variant
+        AND is_complete      = @abap_true
+      ORDER BY scheduled_on_ts DESCENDING
+      INTO TABLE @DATA(newest)
+      UP TO 1 ROWS.
+    IF newest IS INITIAL.
+      output->add( subject = `RESULT`
+                   item    = lcl_output=>label-missing
+                   content = |no complete run with variant { check_variant }| ).
+      RETURN.
+    ENDIF.
+
+    settings-result_id = |{ newest[ 1 ]-display_id }|.
+    output->add( subject = `RESULT`
+                 item    = `newest complete run`
+                 content = |{ settings-result_id } { newest[ 1 ]-title } { newest[ 1 ]-scheduled_on_ts }| ).
+  ENDMETHOD.
+
+  METHOD read_findings.
+    DATA access TYPE REF TO if_satc_result_access.
+    DATA result_id TYPE satc_d_result_id.
+
+    result_id = settings-result_id.
+    access ?= NEW cl_satc_api_factory( )->create_result_access( result_id ).
+    access->get_findings( IMPORTING e_findings = result ).
+  ENDMETHOD.
+
+  METHOD report_classic_attributes.
+    DATA mappings TYPE REF TO object.
+
+    DATA(subject) = |{ api-mappings }->{ api-extract }|.
+    DATA(mappings_type) = catalog->object_descriptor( api-mappings ).
+    IF mappings_type IS NOT BOUND OR NOT line_exists( mappings_type->methods[ name = api-extract ] ).
+      output->add( subject = subject
+                   item    = lcl_output=>label-missing ).
+      RETURN.
+    ENDIF.
+
+    TRY.
+        IF mappings_type->methods[ name = api-extract ]-is_class = abap_false.
+          CREATE OBJECT mappings TYPE (api-mappings).
+        ENDIF.
+        DATA(samples) = one_per_code( findings ).
+        LOOP AT samples REFERENCE INTO DATA(finding).
+          output->add_rows( subject  = |FINDING { finding->test } { finding->code }|
+                            rows     = VALUE scit_rest( ( finding->* ) )
+                            max_rows = 1 ).
+          output->add_rows( subject  = |ATTRIBUTES { finding->test } { finding->code }|
+                            rows     = attributes_of( mappings = mappings
+                                                      finding  = finding )
+                            max_rows = max_nested_rows ).
+        ENDLOOP.
+      CATCH cx_root INTO DATA(failure).
+        output->add_failure( subject = subject
+                             failure = failure ).
+    ENDTRY.
+  ENDMETHOD.
+
+  METHOD one_per_code.
+    " one finding per check and message code is enough to see where the referenced object is kept
+    DATA sampled TYPE sample_keys.
+
+    LOOP AT findings REFERENCE INTO DATA(finding) WHERE test CP clean_core_checks.
+      INSERT |{ finding->test } { finding->code }| INTO TABLE sampled.
+      IF sy-subrc = 0.
+        INSERT finding->* INTO TABLE result.
+      ENDIF.
+      IF lines( result ) >= max_samples.
+        RETURN.
+      ENDIF.
+    ENDLOOP.
+  ENDMETHOD.
+
+  METHOD attributes_of.
+    DATA(parameters) = VALUE abap_parmbind_tab( ( name  = api-finding
+                                                  kind  = cl_abap_objectdescr=>exporting
+                                                  value = finding )
+                                                ( name  = api-attributes
+                                                  kind  = cl_abap_objectdescr=>returning
+                                                  value = REF #( result ) ) ).
+    IF mappings IS BOUND.
+      CALL METHOD mappings->(api-extract) PARAMETER-TABLE parameters.
+    ELSE.
+      CALL METHOD (api-mappings)=>(api-extract) PARAMETER-TABLE parameters.
+    ENDIF.
+  ENDMETHOD.
+
+  METHOD report_api_attributes.
+    DATA(subject) = |{ api-newer_api } findings|.
+    TRY.
+        DATA(findings) = api_findings( ).
+        output->add( subject = subject
+                     item    = lcl_output=>label-row_count
+                     content = |{ lines( findings ) }| ).
+        add_nested( subject = subject
+                    rows    = api_one_per_code( findings ) ).
+      CATCH cx_root INTO DATA(failure).
+        output->add_failure( subject = subject
+                             failure = failure ).
+    ENDTRY.
+  ENDMETHOD.
+
+  METHOD api_one_per_code.
+    DATA sampled TYPE sample_keys.
+
+    LOOP AT findings REFERENCE INTO DATA(finding).
+      DATA(check) = text_of( finding->check ).
+      IF check NP clean_core_checks.
+        CONTINUE.
+      ENDIF.
+      INSERT |{ check } { text_of( finding->code ) }| INTO TABLE sampled.
+      IF sy-subrc = 0.
+        INSERT finding->* INTO TABLE result.
+      ENDIF.
+      IF lines( result ) >= max_samples.
+        RETURN.
+      ENDIF.
+    ENDLOOP.
+  ENDMETHOD.
+
+  METHOD api_findings.
+    DATA factory TYPE REF TO if_satc_api_factory.
+    DATA atc_result TYPE REF TO if_satc_api_result.
+    DATA result_id TYPE if_satc_api_result=>ty_result_id.
+
+    CALL METHOD (api-newer_api)=>(api-create_factory)
+      RECEIVING api_factory = factory.
+    result_id = settings-result_id.
+    atc_result ?= factory->get_result_by_id( result_id ).
+    result = atc_result->get_findings( ).
+  ENDMETHOD.
+
+  METHOD report_result_content.
+    DATA display_id TYPE satc_ac_resultg-display_id.
+
+    display_id = settings-result_id.
+    SELECT FROM satc_ac_resultg
+      FIELDS content_type, serialized_data
+      WHERE display_id = @display_id
+      ORDER BY content_type
+      INTO TABLE @DATA(contents).
+    IF contents IS INITIAL.
+      output->add( subject = `SATC_AC_RESULTG`
+                   item    = lcl_output=>label-missing ).
+      RETURN.
+    ENDIF.
+
+    DATA(object_names) = some_object_names( findings ).
+    LOOP AT contents REFERENCE INTO DATA(content).
+      DATA(subject) = |SATC_AC_RESULTG { content->content_type }|.
+      TRY.
+          DATA(xml) = cl_abap_codepage=>convert_from( content->serialized_data ).
+          report_content( subject      = subject
+                          xml          = replace( val  = xml
+                                                  pcre = user_element_pattern
+                                                  with = masked_element
+                                                  occ  = 0 )
+                          object_names = object_names ).
+        CATCH cx_root INTO DATA(failure).
+          output->add_failure( subject = subject
+                               failure = failure ).
+      ENDTRY.
+    ENDLOOP.
+  ENDMETHOD.
+
+  METHOD some_object_names.
+    " a few checked objects, to see whether the stored content of the run lists them
+    LOOP AT findings REFERENCE INTO DATA(finding).
+      INSERT CONV string( finding->objname ) INTO TABLE result.
+      IF lines( result ) >= max_named_objects.
+        RETURN.
+      ENDIF.
+    ENDLOOP.
+  ENDMETHOD.
+
+  METHOD report_content.
+    output->add( subject = subject
+                 item    = `LENGTH`
+                 content = |{ strlen( xml ) } characters| ).
+    output->add_rows( subject  = |{ subject } tags|
+                      rows     = count_tags( xml )
+                      max_rows = max_tags ).
+    LOOP AT object_names INTO DATA(object_name).
+      output->add( subject = |{ subject } names object|
+                   item    = object_name
+                   content = COND #( WHEN contains( val = xml
+                                                    sub = object_name ) THEN `yes` ELSE `no` ) ).
+    ENDLOOP.
+
+    DATA(chunks) = nmin( val1 = max_text_chunks
+                         val2 = ( strlen( xml ) + text_chunk_length - 1 ) DIV text_chunk_length ).
+    DO chunks TIMES.
+      DATA(offset) = ( sy-index - 1 ) * text_chunk_length.
+      output->add( subject = |{ subject } text|
+                   item    = |{ offset }|
+                   content = substring( val = xml
+                                        off = offset
+                                        len = nmin( val1 = text_chunk_length
+                                                    val2 = strlen( xml ) - offset ) ) ).
+    ENDDO.
+  ENDMETHOD.
+
+  METHOD count_tags.
+    FIND ALL OCCURRENCES OF PCRE tag_pattern IN xml RESULTS DATA(matches).
+    LOOP AT matches REFERENCE INTO DATA(match).
+      DATA(group) = match->submatches[ 1 ].
+      DATA(tag) = substring( val = xml
+                             off = group-offset
+                             len = group-length ).
+      READ TABLE result WITH TABLE KEY tag = tag ASSIGNING FIELD-SYMBOL(<count>).
+      IF sy-subrc = 0.
+        <count>-occurrences = <count>-occurrences + 1.
+      ELSE.
+        INSERT VALUE #( tag         = tag
+                        occurrences = 1 ) INTO TABLE result.
+      ENDIF.
+    ENDLOOP.
+  ENDMETHOD.
+
+  METHOD add_nested.
+    FIELD-SYMBOLS <inner> TYPE ANY TABLE.
+
+    output->add_rows( subject  = subject
+                      rows     = rows
+                      max_rows = max_nested_rows ).
+
+    DATA(row_number) = 0.
+    LOOP AT rows ASSIGNING FIELD-SYMBOL(<row>).
+      row_number = row_number + 1.
+      IF row_number > max_nested_rows.
+        EXIT.
+      ENDIF.
+      DATA(row_type) = cl_abap_typedescr=>describe_by_data( <row> ).
+      IF row_type->kind <> cl_abap_typedescr=>kind_struct.
+        CONTINUE.
+      ENDIF.
+      DATA(components) = CAST cl_abap_structdescr( row_type )->components.
+      LOOP AT components REFERENCE INTO DATA(component) WHERE type_kind = cl_abap_typedescr=>typekind_table.
+        ASSIGN COMPONENT component->name OF STRUCTURE <row> TO <inner>.
+        IF sy-subrc = 0.
+          output->add_rows( subject  = |{ subject } row { row_number } { component->name }|
+                            rows     = <inner>
+                            max_rows = max_nested_rows ).
+        ENDIF.
+      ENDLOOP.
+    ENDLOOP.
+  ENDMETHOD.
+
+  METHOD text_of.
+    DATA(value_type) = cl_abap_typedescr=>describe_by_data( value ).
+    CASE value_type->kind.
+      WHEN cl_abap_typedescr=>kind_elem.
+        result = |{ value }|.
+      WHEN cl_abap_typedescr=>kind_struct.
+        DO.
+          ASSIGN COMPONENT sy-index OF STRUCTURE value TO FIELD-SYMBOL(<component>).
+          IF sy-subrc <> 0.
+            EXIT.
+          ENDIF.
+          DATA(separator) = COND string( WHEN result IS NOT INITIAL THEN `/` ).
+          result = |{ result }{ separator }{ text_of( <component> ) }|.
+        ENDDO.
+      WHEN OTHERS.
+        " a table or reference has no text of its own
+        RETURN.
+    ENDCASE.
+  ENDMETHOD.
+
+ENDCLASS.
+
+*&----------------------------------------------------------------------*
 *&CLASS lcl_application IMPLEMENTATION
 *&----------------------------------------------------------------------*
 CLASS lcl_application IMPLEMENTATION.
@@ -1443,10 +2000,13 @@ CLASS lcl_application IMPLEMENTATION.
     sc_cnote = 'SAP Notes to look up in CWBNTCUST (S_NOTE):'.
     sc_tatc  = 'A - ATC results'.
     sc_catc  = 'Read ATC objects, APIs and result tables'.
-    sc_cres  = 'DISPLAY_ID of a clean core ATC run (P_RESID) - empty: newest runs'.
+    sc_cres  = 'DISPLAY_ID of an ATC run (P_RESID), used by A and D - empty: newest'.
     sc_cmsg  = 'Create the check classes of that run to read their message catalog'.
     sc_tusg  = 'B - SUSG usage data'.
     sc_cusg  = 'Read SUSG objects, APIs and aggregated usage tables'.
+    sc_trdr  = 'D - ATC reader (slice 3)'.
+    sc_crdr  = 'Finding attributes, variant checks, stored content of the run'.
+    sc_cchkv = 'Check variant (P_CHKV) - with P_RESID empty: its newest run'.
     sc_tout  = 'Output'.
     sc_crows = 'Sample rows per table (P_ROWS):'.
     sc_cmask = 'Mask user names in sample rows'.
@@ -1527,6 +2087,14 @@ CLASS lcl_application IMPLEMENTATION.
     IF selection-probes_usage = abap_true.
       INSERT CAST lif_probe( NEW lcl_usage_probe( output  = output
                                                   catalog = catalog ) ) INTO TABLE result.
+    ENDIF.
+    IF selection-probes_reader = abap_true.
+      DATA(reader_settings) = VALUE lcl_reader_probe=>reader_settings( result_id     = selection-result_id
+                                                                       check_variant = selection-check_variant
+                                                                       sample_size   = selection-sample_size ).
+      INSERT CAST lif_probe( NEW lcl_reader_probe( output   = output
+                                                   catalog  = catalog
+                                                   settings = reader_settings ) ) INTO TABLE result.
     ENDIF.
   ENDMETHOD.
 
