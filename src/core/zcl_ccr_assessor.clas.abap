@@ -1,0 +1,79 @@
+"! <p class="shorttext synchronized" lang="EN">Joins level and usage of custom objects to a proposal</p>
+"! Proposes what to do with a custom object from its clean core level and its usage.
+"! Confirmed on SAP S/4HANA 2025 (SAP_BASIS 816): the usage data of SUSG has rows for
+"! classes, function groups and programs only.
+CLASS zcl_ccr_assessor DEFINITION
+  PUBLIC
+  FINAL
+  CREATE PUBLIC.
+
+  PUBLIC SECTION.
+    INTERFACES zif_ccr_assessor.
+
+  PRIVATE SECTION.
+    "! Object types whose usage can be measured
+    CONSTANTS: BEGIN OF measured_type,
+                 class          TYPE zif_ccr_level_rules=>object_type VALUE 'CLAS',
+                 function_group TYPE zif_ccr_level_rules=>object_type VALUE 'FUGR',
+                 program        TYPE zif_ccr_level_rules=>object_type VALUE 'PROG',
+               END OF measured_type.
+
+    METHODS usage_state_of
+      IMPORTING object_type   TYPE zif_ccr_level_rules=>object_type
+                executions    TYPE zif_ccr_assessor=>execution_count
+      RETURNING VALUE(result) TYPE zif_ccr_assessor=>usage_state_code.
+
+    METHODS proposal_for
+      IMPORTING level         TYPE zif_ccr_level_rules=>clean_core_level
+                usage_state   TYPE zif_ccr_assessor=>usage_state_code
+      RETURNING VALUE(result) TYPE zif_ccr_assessor=>proposal_code.
+
+ENDCLASS.
+
+
+CLASS zcl_ccr_assessor IMPLEMENTATION.
+
+  METHOD zif_ccr_assessor~assess.
+    LOOP AT object_levels REFERENCE INTO DATA(object_level).
+      DATA(usage) = VALUE zif_ccr_assessor=>object_usage(
+        usages[ object_type = object_level->object_type
+                object_name = object_level->object_name ] OPTIONAL ).
+      DATA(assessment) = CORRESPONDING zif_ccr_assessor=>assessment( object_level->* ).
+      assessment-executions  = usage-executions.
+      assessment-last_used   = usage-last_used.
+      assessment-usage_state = usage_state_of( object_type = object_level->object_type
+                                               executions  = usage-executions ).
+      assessment-proposal    = proposal_for( level       = object_level->level
+                                             usage_state = assessment-usage_state ).
+      INSERT assessment INTO TABLE result.
+    ENDLOOP.
+  ENDMETHOD.
+
+
+  METHOD usage_state_of.
+    CASE object_type.
+      WHEN measured_type-class
+        OR measured_type-function_group
+        OR measured_type-program.
+        result = COND #( WHEN executions > 0
+                         THEN zif_ccr_assessor=>usage_state-used
+                         ELSE zif_ccr_assessor=>usage_state-not_used ).
+      WHEN OTHERS.
+        result = zif_ccr_assessor=>usage_state-unknown.
+    ENDCASE.
+  ENDMETHOD.
+
+
+  METHOD proposal_for.
+    IF usage_state = zif_ccr_assessor=>usage_state-not_used.
+      result = zif_ccr_assessor=>proposal-retire.
+      RETURN.
+    ENDIF.
+
+    result = SWITCH #( level
+                       WHEN zif_ccr_level_rules=>level-c THEN zif_ccr_assessor=>proposal-remediate
+                       WHEN zif_ccr_level_rules=>level-d THEN zif_ccr_assessor=>proposal-remediate_first
+                       ELSE zif_ccr_assessor=>proposal-keep ).
+  ENDMETHOD.
+
+ENDCLASS.
