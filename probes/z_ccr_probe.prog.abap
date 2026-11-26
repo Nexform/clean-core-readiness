@@ -226,6 +226,8 @@ CLASS lcl_catalog DEFINITION FINAL CREATE PUBLIC.
     CONSTANTS count_column TYPE string VALUE `ROW_COUNT`.
     CONSTANTS english TYPE sylangu VALUE 'E'.
     CONSTANTS character_type TYPE c LENGTH 4 VALUE 'CHAR'.
+    CONSTANTS raw_type TYPE c LENGTH 4 VALUE 'RAW'.
+    CONSTANTS raw_key_length TYPE i VALUE 16.
     CONSTANTS groupable_types TYPE string VALUE `CHAR NUMC INT1 INT2 INT4`.
     CONSTANTS time_field_pattern TYPE string VALUE `_TS$|TIMESTAMP|CHANGED_ON|CREATED_ON|LAST_USED|LASTUSED`.
     CONSTANTS category_field_pattern TYPE string VALUE `TYPE|KIND|PRIO|LEVEL|STATE|STATUS`.
@@ -233,6 +235,8 @@ CLASS lcl_catalog DEFINITION FINAL CREATE PUBLIC.
     DATA output TYPE REF TO lcl_output.
     DATA sample_size TYPE i.
     DATA described_types TYPE type_names.
+    "! Key value of a RAW(16) key field - the dynamic conditions name it as host variable.
+    DATA raw_key TYPE x LENGTH 16.
 
     METHODS select_objects
       IMPORTING filter        TYPE object_filter
@@ -843,9 +847,15 @@ CLASS lcl_catalog IMPLEMENTATION.
     ENDIF.
 
     LOOP AT filter-key_fields INTO DATA(key_field).
-      IF line_exists( fields[ fieldname = key_field
-                              datatype  = character_type ] ).
+      DATA(field) = VALUE dfies( fields[ fieldname = key_field ] OPTIONAL ).
+      IF field-datatype = character_type.
         result = |{ key_field } = { cl_abap_dyn_prg=>quote( filter-key_value ) }|.
+        RETURN.
+      ENDIF.
+      IF field-datatype = raw_type AND CONV i( field-leng ) = raw_key_length.
+        " a GUID key is compared through a host variable: a text literal has no RAW type
+        raw_key = filter-key_value.
+        result = |{ key_field } = @RAW_KEY|.
         RETURN.
       ENDIF.
     ENDLOOP.

@@ -1,0 +1,30 @@
+name: abaplint
+
+# Runs for every pull request and for every commit that reaches main. If a ruleset of main
+# requires the job "abaplint": keep the job name, and add no "paths" filter - a required
+# check that does not run blocks the merge for good.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  abaplint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      # abaplint.json is the On-Prem configuration of greltel/abap-llm-rulebook, unchanged.
+      # It checks /src only: the probe programs in /probes are diagnostics, not part of the tool.
+      - name: Run abaplint (On-Prem rules, syntax of ABAP 7.58)
+        run: npx --yes @abaplint/cli@2.120.107 abaplint.json
