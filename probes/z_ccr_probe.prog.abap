@@ -3,7 +3,7 @@
 *#      |\\/\\//\|        -----------------------------------      #*
 *#      |        |       /      Report: Z_CCR_PROBE          \     #*
 *#      |  (*) (*)      /                                     \    #*
-*#      |       __)    /        Version: 1.0 ()                \   #*
+*#      |       __)    /        Version: 1.1 ()                \   #*
 *#     (C    _____\   /         Magic. Do not touch.            \  #*
 *#       \  (__(   --{-------------------------------------------} #*
 *#       |    /       \         Created By : George Drakos      /  #*
@@ -18,9 +18,11 @@
 *&--------------------------------------------------------------------&*
 *&              M O D I F I C A T I O N    L O G                      &*
 *&--------------------------------------------------------------------&*
-*& Description    :                                                    *
-*& Author         :                                                    *
-*& Date           :                                                    *
+*& Description    : Result key RAW(16) compared as host variable; FOR  *
+*&                  variable of NOTE_CONDITION renamed, NOTE is the one*
+*&                  of START-OF-SELECTION                              *
+*& Author         : George Drakos                                      *
+*& Date           : 26/11/2026                                         *
 *& Change Request :                                                    *
 *&--------------------------------------------------------------------&*
 REPORT z_ccr_probe.
@@ -1059,8 +1061,8 @@ CLASS lcl_release_probe IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD note_condition.
-    DATA(quoted) = VALUE string_table( FOR note IN notes
-                                       ( cl_abap_dyn_prg=>quote( note ) ) ).
+    DATA(quoted) = VALUE string_table( FOR tmp_note IN notes
+                                       ( cl_abap_dyn_prg=>quote( tmp_note ) ) ).
     DATA(note_list) = concat_lines_of( table = quoted
                                        sep   = `, ` ).
     result = |NUMM IN ( { note_list } )|.

@@ -1,0 +1,37 @@
+name: unit
+
+# Runs the ABAP Unit tests of the core logic off-stack: the sources of src/core are transpiled
+# to JavaScript and run on Node. The readers and the report need ATC and SUSG and are tested
+# in a system only - they live outside src/core and are not transpiled.
+#
+# Runs for every pull request and for every commit that reaches main. If a ruleset of main
+# requires the job "unit": keep the job name, and add no "paths" filter - a required check
+# that does not run blocks the merge for good.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  unit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install the toolchain and open-abap-core
+        run: npm ci
+      - name: Transpile src/core to JavaScript
+        run: npm run transpile
+      - name: Run the ABAP Unit tests
+        run: npm run unit

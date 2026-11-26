@@ -1,0 +1,27 @@
+{
+  "name": "clean-core-readiness",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Clean Core Readiness: off-stack lint and unit test toolchain (abaplint + transpiler).",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Nexform/clean-core-readiness.git"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "lint": "abaplint abaplint.json",
+    "transpile": "rimraf output && abap_transpile abap_transpile.json",
+    "unit": "node output/index.mjs",
+    "test": "npm run transpile && npm run unit"
+  },
+  "devDependencies": {
+    "@abaplint/cli": "^2.120.107",
+    "@abaplint/runtime": "^2.14.33",
+    "@abaplint/transpiler-cli": "^2.14.33",
+    "open-abap-core": "github:open-abap/open-abap-core#0c495ec0d059be72adc76b97848c6cc5ad8a1fe8",
+    "rimraf": "^6.1.4"
+  }
+}
