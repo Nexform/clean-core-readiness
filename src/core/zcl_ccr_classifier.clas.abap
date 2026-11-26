@@ -1,5 +1,5 @@
 "! <p class="shorttext synchronized" lang="EN">Classifies custom objects by clean core level</p>
-"! Gives every custom object the worst clean core level among its findings.
+"! Gives every custom object the worst clean core level among its findings, level A without one.
 CLASS zcl_ccr_classifier DEFINITION
   PUBLIC
   FINAL
@@ -32,6 +32,11 @@ CLASS zcl_ccr_classifier IMPLEMENTATION.
 
 
   METHOD zif_ccr_classifier~classify.
+    result = VALUE #( FOR object IN objects
+                      ( object_type = object-object_type
+                        object_name = object-object_name
+                        level       = zif_ccr_level_rules=>level-a ) ).
+
     LOOP AT findings REFERENCE INTO DATA(finding).
       IF NOT line_exists( result[ object_type = finding->object_type
                                   object_name = finding->object_name ] ).

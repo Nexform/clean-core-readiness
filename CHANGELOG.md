@@ -17,6 +17,11 @@ All notable changes to this project are listed here. The format follows
   measured and did not run is a candidate to retire; otherwise keep at level A or B,
   remediate at C, remediate first at D. Usage can be measured for classes, function groups
   and programs only; every other object has usage "unknown" and is never proposed to retire.
+- ATC reader: `ZIF_CCR_ATC_READER` and its adapter `ZCL_CCR_ATC_READER` list the complete
+  runs of a check variant, read the findings of one run through the classic ATC API and read
+  the objects of the checked packages and their subpackages from TADIR (an ATC result does
+  not list the objects it checked).
+- `ZCL_CCR_CLASSIFIER` takes the checked objects too: an object without any finding is level A.
 - Workflow `unit`: the ABAP Unit tests of `src/core` run off-stack on every pull request.
 - Probe program `Z_CCR_PROBE` that confirms the ATC and SUSG interfaces of a system.
 - Probe `Z_CCR_PROBE` 1.3, part D for the ATC reader: attributes of a finding (where the
