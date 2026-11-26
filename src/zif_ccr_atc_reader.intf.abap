@@ -12,7 +12,7 @@ INTERFACE zif_ccr_atc_reader PUBLIC.
            is_central   TYPE satc_ac_resulth-is_central_run,
          END OF run.
   "! Runs, newest first
-  TYPES runs TYPE STANDARD TABLE OF run WITH EMPTY KEY.
+  TYPES run_list TYPE STANDARD TABLE OF run WITH EMPTY KEY.
   TYPES check_variant TYPE satc_ac_resulth-chk_profile_name.
   TYPES package_range TYPE RANGE OF devclass.
   TYPES object_type_range TYPE RANGE OF trobjtype.
@@ -23,7 +23,7 @@ INTERFACE zif_ccr_atc_reader PUBLIC.
   "! @parameter result        | Complete runs, newest first
   METHODS runs
     IMPORTING check_variant TYPE check_variant
-    RETURNING VALUE(result) TYPE runs.
+    RETURNING VALUE(result) TYPE run_list.
 
   "! All findings of one run, of every check of its variant.
   "!
