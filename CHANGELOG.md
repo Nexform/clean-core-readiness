@@ -24,6 +24,11 @@ All notable changes to this project are listed here. The format follows
 - Usage reader: `ZIF_CCR_USAGE_READER` and its adapter `ZCL_CCR_USAGE_READER` list the usage
   data sets of SUSG with their period and sum the executions and the last use of the checked
   objects in one data set, in the database.
+- Report `Z_CCR_READINESS`: choose the ATC run of the check variant and the usage data set
+  with value help, enter the packages of the run and the object types (default CLAS, INTF,
+  PROG, FUGR, DDLS, BDEF, ENHO); the ALV list shows one row per object with level, findings
+  per level, usage and proposal, and above it the run and the period of the usage data.
+  Export to a spreadsheet from the ALV toolbar.
 - `ZCL_CCR_CLASSIFIER` takes the checked objects too: an object without any finding is level A.
 - Workflow `unit`: the ABAP Unit tests of `src/core` run off-stack on every pull request.
 - Probe program `Z_CCR_PROBE` that confirms the ATC and SUSG interfaces of a system.
