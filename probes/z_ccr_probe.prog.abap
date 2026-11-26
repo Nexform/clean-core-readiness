@@ -3,7 +3,7 @@
 *#      |\\/\\//\|        -----------------------------------      #*
 *#      |        |       /      Report: Z_CCR_PROBE          \     #*
 *#      |  (*) (*)      /                                     \    #*
-*#      |       __)    /        Version: 1.2 ()                \   #*
+*#      |       __)    /        Version: 1.3 ()                \   #*
 *#     (C    _____\   /         Magic. Do not touch.            \  #*
 *#       \  (__(   --{-------------------------------------------} #*
 *#       |    /       \         Created By : George Drakos      /  #*
@@ -21,6 +21,12 @@
 *& Description    : Result key RAW(16) compared as host variable; FOR  *
 *&                  variable of NOTE_CONDITION renamed, NOTE is the one*
 *&                  of START-OF-SELECTION                              *
+*& Author         : George Drakos                                      *
+*& Date           : 26/11/2026                                         *
+*& Change Request :                                                    *
+*&--------------------------------------------------------------------&*
+*& Description    : Check variant read through the API factory, its   *
+*&                  constructor is private; class of the variant object*
 *& Author         : George Drakos                                      *
 *& Date           : 26/11/2026                                         *
 *& Change Request :                                                    *
@@ -463,8 +469,7 @@ CLASS lcl_reader_probe DEFINITION FINAL CREATE PUBLIC.
     TYPES tag_counts TYPE SORTED TABLE OF tag_count WITH UNIQUE KEY tag.
 
     CONSTANTS: BEGIN OF api,
-                 variant         TYPE c LENGTH 30 VALUE 'CL_SATC_API_CHECK_VARIANT',
-                 variant_name    TYPE c LENGTH 30 VALUE 'NAME',
+                 variant_lookup  TYPE c LENGTH 30 VALUE 'GET_CHECK_VARIANT_BY_NAME',
                  check_messages  TYPE c LENGTH 30 VALUE 'GET_CHECK_MESSAGES',
                  checks          TYPE c LENGTH 30 VALUE 'CHECKS_WITH_PRIORITIES',
                  mappings        TYPE c LENGTH 30 VALUE 'CL_SATC_API_MAPPINGS',
@@ -1642,21 +1647,24 @@ CLASS lcl_reader_probe IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD report_variant_checks.
+    DATA factory TYPE REF TO if_satc_api_factory.
     DATA variant TYPE REF TO object.
     DATA name TYPE if_satc_api_factory=>ty_check_variant_name.
     DATA checks TYPE cl_satc_api_check_variant=>ty_checks_with_msg_priorities.
 
-    DATA(subject) = |{ api-variant } { settings-check_variant }|.
-    name = settings-check_variant.
-    DATA(construction) = VALUE abap_parmbind_tab( ( name  = api-variant_name
-                                                    kind  = cl_abap_objectdescr=>exporting
-                                                    value = REF #( name ) ) ).
+    DATA(subject) = |{ api-variant_lookup } { settings-check_variant }|.
     DATA(messages_call) = VALUE abap_parmbind_tab( ( name  = api-checks
                                                      kind  = cl_abap_objectdescr=>returning
                                                      value = REF #( checks ) ) ).
     TRY.
-        " created by name: whether the class may be instantiated outside its package is a question here
-        CREATE OBJECT variant TYPE (api-variant) PARAMETER-TABLE construction.
+        " the constructor of the variant class is private - the API factory hands the variant out
+        CALL METHOD (api-newer_api)=>(api-create_factory)
+          RECEIVING api_factory = factory.
+        name = settings-check_variant.
+        variant = factory->get_check_variant_by_name( name ).
+        output->add( subject = subject
+                     item    = `CLASS`
+                     content = cl_abap_classdescr=>get_class_name( variant ) ).
         CALL METHOD variant->(api-check_messages) PARAMETER-TABLE messages_call.
         add_nested( subject = subject
                     rows    = checks ).

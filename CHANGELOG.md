@@ -19,7 +19,7 @@ All notable changes to this project are listed here. The format follows
   and programs only; every other object has usage "unknown" and is never proposed to retire.
 - Workflow `unit`: the ABAP Unit tests of `src/core` run off-stack on every pull request.
 - Probe program `Z_CCR_PROBE` that confirms the ATC and SUSG interfaces of a system.
-- Probe `Z_CCR_PROBE` 1.2, part D for the ATC reader: attributes of a finding (where the
+- Probe `Z_CCR_PROBE` 1.3, part D for the ATC reader: attributes of a finding (where the
   referenced object is kept), checks and message codes of the clean core check variant, and
   the stored content of a run (whether it lists the checked objects).
 - Guide to the method: `docs/guide.md`.
