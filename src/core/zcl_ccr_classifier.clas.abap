@@ -33,15 +33,15 @@ CLASS zcl_ccr_classifier IMPLEMENTATION.
 
   METHOD zif_ccr_classifier~classify.
     LOOP AT findings REFERENCE INTO DATA(finding).
-      DATA(object) = REF #( result[ object_type = finding->object_type
-                                    object_name = finding->object_name ] OPTIONAL ).
-      IF object IS NOT BOUND.
+      IF NOT line_exists( result[ object_type = finding->object_type
+                                  object_name = finding->object_name ] ).
         INSERT VALUE #( object_type = finding->object_type
                         object_name = finding->object_name
-                        level       = zif_ccr_level_rules=>level-a ) INTO TABLE result REFERENCE INTO object.
+                        level       = zif_ccr_level_rules=>level-a ) INTO TABLE result.
       ENDIF.
       count_finding( level  = rules->level_of( finding->* )
-                     object = object ).
+                     object = REF #( result[ object_type = finding->object_type
+                                             object_name = finding->object_name ] ) ).
     ENDLOOP.
   ENDMETHOD.
 
