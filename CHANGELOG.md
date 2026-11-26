@@ -19,6 +19,9 @@ All notable changes to this project are listed here. The format follows
   and programs only; every other object has usage "unknown" and is never proposed to retire.
 - Workflow `unit`: the ABAP Unit tests of `src/core` run off-stack on every pull request.
 - Probe program `Z_CCR_PROBE` that confirms the ATC and SUSG interfaces of a system.
+- Probe `Z_CCR_PROBE` 1.3, part D for the ATC reader: attributes of a finding (where the
+  referenced object is kept), checks and message codes of the clean core check variant, and
+  the stored content of a run (whether it lists the checked objects).
 - Guide to the method: `docs/guide.md`.
 
 ### Fixed
@@ -26,3 +29,4 @@ All notable changes to this project are listed here. The format follows
 - `ZCL_CCR_CLASSIFIER` raised `CX_SY_DYN_CALL_ILLEGAL_TYPE` in a system: it passed a row of a
   sorted table to a CHANGING parameter. The row is now handed over as a reference. The
   off-stack tests had not shown it, because the transpiler does not protect table keys.
+- `Z_CCR_PROBE` masks fields named `RESP*` as user names.
