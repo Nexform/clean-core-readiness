@@ -158,7 +158,12 @@ CLASS lcl_alv DEFINITION FINAL CREATE PUBLIC.
                 atc_reader  TYPE REF TO zif_ccr_atc_reader.
 
   PRIVATE SECTION.
-    TYPES output_rows TYPE STANDARD TABLE OF zif_ccr_assessor=>assessment WITH EMPTY KEY.
+    "! A row of the list: the assessment with the color of its level
+    TYPES BEGIN OF output_row.
+    INCLUDE TYPE zif_ccr_assessor=>assessment.
+    TYPES colors TYPE lvc_t_scol.
+    TYPES END OF output_row.
+    TYPES output_rows TYPE STANDARD TABLE OF output_row WITH EMPTY KEY.
     TYPES: BEGIN OF column_text,
              name TYPE lvc_fname,
              text TYPE scrtext_m,
@@ -169,9 +174,17 @@ CLASS lcl_alv DEFINITION FINAL CREATE PUBLIC.
     TYPES level TYPE zif_ccr_level_rules=>clean_core_level.
     TYPES kind_text TYPE string.
     INCLUDE TYPE zif_ccr_atc_reader=>finding_detail.
+    TYPES colors TYPE lvc_t_scol.
     TYPES END OF finding_row.
     TYPES finding_rows TYPE STANDARD TABLE OF finding_row WITH EMPTY KEY.
 
+    "! ALV colors of the levels: A green, B yellow, C orange, D red
+    CONSTANTS: BEGIN OF level_color,
+                 a TYPE lvc_col VALUE '5',
+                 b TYPE lvc_col VALUE '3',
+                 c TYPE lvc_col VALUE '7',
+                 d TYPE lvc_col VALUE '6',
+               END OF level_color.
     "! Usage data of less than a year can miss jobs that run once a year
     CONSTANTS days_of_a_year TYPE i VALUE 365.
     "! Kind of a usage data set collected in this system (SUSG_ADMIN-KIND)
@@ -187,6 +200,15 @@ CLASS lcl_alv DEFINITION FINAL CREATE PUBLIC.
     METHODS name_columns
       IMPORTING columns TYPE REF TO cl_salv_columns_table
                 texts   TYPE column_texts.
+
+    "! The cell color of the column LEVEL for a level
+    METHODS colors_of
+      IMPORTING level         TYPE zif_ccr_level_rules=>clean_core_level
+      RETURNING VALUE(result) TYPE lvc_t_scol.
+
+    "! Zebra pattern and the level colors, the same in list and popup
+    METHODS set_look
+      IMPORTING alv TYPE REF TO cl_salv_table.
 
     METHODS on_double_click
       FOR EVENT double_click OF cl_salv_events_table
@@ -468,7 +490,9 @@ ENDCLASS.
 CLASS lcl_alv IMPLEMENTATION.
 
   METHOD display.
-    rows = assessments.
+    rows = VALUE #( FOR assessment IN assessments
+                    ( VALUE #( BASE CORRESPONDING output_row( assessment )
+                               colors = colors_of( assessment-level ) ) ) ).
     reader = atc_reader.
     level_rules = NEW zcl_ccr_level_rules( ).
     TRY.
@@ -476,6 +500,11 @@ CLASS lcl_alv IMPLEMENTATION.
                                 CHANGING  t_table      = rows ).
         alv->get_functions( )->set_all( ).
         alv->get_columns( )->set_optimize( ).
+        set_look( alv ).
+        " layouts (columns, sort, filter) can be saved per user and as default
+        alv->get_layout( )->set_key( VALUE #( report = sy-repid ) ).
+        alv->get_layout( )->set_save_restriction( if_salv_c_layout=>restrict_none ).
+        alv->get_layout( )->set_default( abap_true ).
         " the assessment has own types without dictionary texts, so every column is named here
         name_columns( columns = alv->get_columns( )
                       texts   = VALUE #( ( name = 'OBJECT_TYPE' text = TEXT-c01 )
@@ -514,11 +543,36 @@ CLASS lcl_alv IMPLEMENTATION.
   ENDMETHOD.
 
 
+  METHOD colors_of.
+    DATA(color) = SWITCH lvc_col( level
+                                  WHEN zif_ccr_level_rules=>level-a THEN level_color-a
+                                  WHEN zif_ccr_level_rules=>level-b THEN level_color-b
+                                  WHEN zif_ccr_level_rules=>level-c THEN level_color-c
+                                  WHEN zif_ccr_level_rules=>level-d THEN level_color-d ).
+    IF color IS INITIAL.
+      RETURN.
+    ENDIF.
+    result = VALUE #( ( fname = 'LEVEL'
+                        color = VALUE #( col = color ) ) ).
+  ENDMETHOD.
+
+
+  METHOD set_look.
+    alv->get_display_settings( )->set_striped_pattern( abap_true ).
+    TRY.
+        alv->get_columns( )->set_color_column( 'COLORS' ).
+      CATCH cx_salv_data_error.
+        " without the color column the list is still complete, only without colors
+        RETURN.
+    ENDTRY.
+  ENDMETHOD.
+
+
   METHOD on_double_click.
     IF NOT line_exists( rows[ row ] ).
       RETURN.
     ENDIF.
-    show_findings( rows[ row ] ).
+    show_findings( CORRESPONDING #( rows[ row ] ) ).
   ENDMETHOD.
 
 
@@ -537,6 +591,7 @@ CLASS lcl_alv IMPLEMENTATION.
       ENDIF.
       DATA(finding) = CORRESPONDING finding_row( detail->* ).
       finding-level = level.
+      finding-colors = colors_of( level ).
       finding-kind_text = SWITCH #( detail->kind
                                     WHEN zif_ccr_level_rules=>finding_kind-note    THEN TEXT-k01
                                     WHEN zif_ccr_level_rules=>finding_kind-warning THEN TEXT-k02
@@ -564,6 +619,7 @@ CLASS lcl_alv IMPLEMENTATION.
                                  end_line     = 20 ).
         popup->get_display_settings( )->set_list_header( |{ TEXT-t02 } { assessment-object_name }| ).
         popup->get_columns( )->set_optimize( ).
+        set_look( popup ).
         name_columns( columns = popup->get_columns( )
                       texts   = VALUE #( ( name = 'LEVEL'           text = TEXT-c03 )
                                          ( name = 'CHECK_NAME'      text = TEXT-c20 )
