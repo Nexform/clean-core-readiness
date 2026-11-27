@@ -1,8 +1,10 @@
 "! <p class="shorttext synchronized" lang="EN">Clean core level rules of the SAP checks</p>
-"! Knows the clean core checks of SAP and the level their findings stand for. Confirmed on
-"! SAP S/4HANA 2025 (SAP_BASIS 816) for the check "Usage of APIs": a note is a classic API
-"! (level B), a warning an internal object (level C), an error an object that must not be
-"! used (level D).
+"! Knows the four clean core checks of SAP and the level their findings stand for: Usage of
+"! APIs, Critical statements, Allowed enhancement technologies, Detect customer modifications.
+"! All four report a note for level B, a warning for C and an error for D; "Allowed enhancement
+"! technologies" says so in the text of its note ("is Clean Core Level B"). Confirmed on
+"! SAP S/4HANA 2025 (SAP_BASIS 816) with findings of "Usage of APIs"; the other three checks
+"! from their message catalogs.
 CLASS zcl_ccr_level_rules DEFINITION
   PUBLIC
   FINAL
@@ -12,8 +14,14 @@ CLASS zcl_ccr_level_rules DEFINITION
     INTERFACES zif_ccr_level_rules.
 
   PRIVATE SECTION.
-    "! Class of the ATC check "Usage of APIs"
-    CONSTANTS api_usage_check TYPE zif_ccr_level_rules=>check_name VALUE 'CL_YCM_CC_CHECK_API_USAGE'.
+    "! Classes of the four clean core checks of the variant ABAP_CLEAN_CORE_DEVELOPMENT, as read
+    "! from the variant on S/4HANA 2025 (probe 1.4)
+    CONSTANTS: BEGIN OF clean_core_check,
+                 api_usage     TYPE zif_ccr_level_rules=>check_name VALUE 'CL_YCM_CC_CHECK_API_USAGE',
+                 critical      TYPE zif_ccr_level_rules=>check_name VALUE 'CL_CI_TEST_CRITICAL_STATEMENTS',
+                 enhancements  TYPE zif_ccr_level_rules=>check_name VALUE 'CL_CI_TEST_ADMISSIBLE_ENHANCM',
+                 modifications TYPE zif_ccr_level_rules=>check_name VALUE 'CL_CI_TEST_CUST_MODIFICATIONS',
+               END OF clean_core_check.
     "! Codes with which the check framework reports its own problems: a syntax error in the
     "! checked object, a failed RFC connection
     CONSTANTS framework_code_pattern TYPE string VALUE `_*`.
@@ -28,6 +36,10 @@ CLASS zcl_ccr_level_rules DEFINITION
                  released_unread  TYPE zif_ccr_level_rules=>message_code VALUE 'SPRVIDR_ER',
                END OF technical_code.
 
+    METHODS is_clean_core_check
+      IMPORTING check_name    TYPE zif_ccr_level_rules=>check_name
+      RETURNING VALUE(result) TYPE abap_bool.
+
     METHODS is_technical
       IMPORTING code          TYPE zif_ccr_level_rules=>message_code
       RETURNING VALUE(result) TYPE abap_bool.
@@ -38,7 +50,7 @@ ENDCLASS.
 CLASS zcl_ccr_level_rules IMPLEMENTATION.
 
   METHOD zif_ccr_level_rules~level_of.
-    IF finding-check_name <> api_usage_check OR is_technical( finding-code ) = abap_true.
+    IF is_clean_core_check( finding-check_name ) = abap_false OR is_technical( finding-code ) = abap_true.
       result = zif_ccr_level_rules=>level-none.
       RETURN.
     ENDIF.
@@ -48,6 +60,15 @@ CLASS zcl_ccr_level_rules IMPLEMENTATION.
                        WHEN zif_ccr_level_rules=>finding_kind-warning THEN zif_ccr_level_rules=>level-c
                        WHEN zif_ccr_level_rules=>finding_kind-error   THEN zif_ccr_level_rules=>level-d
                        ELSE zif_ccr_level_rules=>level-none ).
+  ENDMETHOD.
+
+
+  METHOD is_clean_core_check.
+    " the four checks report by the same message kinds: note B, warning C, error D
+    result = xsdbool( check_name = clean_core_check-api_usage
+                   OR check_name = clean_core_check-critical
+                   OR check_name = clean_core_check-enhancements
+                   OR check_name = clean_core_check-modifications ).
   ENDMETHOD.
 
 
