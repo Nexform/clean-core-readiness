@@ -21,6 +21,7 @@ INTERFACE zif_ccr_atc_reader PUBLIC.
            check_name      TYPE zif_ccr_level_rules=>check_name,
            check_title     TYPE string,
            code            TYPE zif_ccr_level_rules=>message_code,
+           message         TYPE string,
            kind            TYPE zif_ccr_level_rules=>finding_kind_code,
            sub_object      TYPE string,
            line            TYPE i,
