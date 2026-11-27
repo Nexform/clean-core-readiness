@@ -27,7 +27,7 @@ All notable changes to this project are listed here. The format follows
   `/1BCDWB/*` and `CLR_*` classes in `$TMP`) were listed as level A and proposed for
   retirement. They are left out now.
 
-## [0.1.0] - 2026-11-27
+## 0.1.0 - 2026-11-27 (not tagged; released together with 0.2.0)
 
 
 ### Added
@@ -90,5 +90,4 @@ All notable changes to this project are listed here. The format follows
 - `Z_CCR_READINESS`: the length of the selection texts in the program XML is the one the
   system writes (text plus 8), so abapGit shows no difference after a pull.
 
-[0.2.0]: https://github.com/Nexform/clean-core-readiness/compare/v0.1.0...v0.2.0
-[0.1.0]: https://github.com/Nexform/clean-core-readiness/releases/tag/v0.1.0
+[0.2.0]: https://github.com/Nexform/clean-core-readiness/releases/tag/v0.2.0
