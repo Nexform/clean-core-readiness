@@ -33,7 +33,8 @@ INTERFACE zif_ccr_atc_reader PUBLIC.
     IMPORTING result_id     TYPE satc_d_result_id
     RETURNING VALUE(result) TYPE zif_ccr_level_rules=>findings.
 
-  "! The repository objects of the packages and of all their subpackages.
+  "! The repository objects of the packages and of all their subpackages, without the objects
+  "! the system generated.
   "!
   "! @parameter packages     | The packages the ATC run checked; empty gives no object
   "! @parameter object_types | Object types to take; empty takes every type
