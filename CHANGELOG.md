@@ -3,7 +3,32 @@
 All notable changes to this project are listed here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [Unreleased]
+## [0.2.0] - 2026-11-27
+
+### Added
+
+- All four clean core checks decide the level: besides "Usage of APIs", also "Critical
+  statements" (`CL_CI_TEST_CRITICAL_STATEMENTS`), "Allowed enhancement technologies"
+  (`CL_CI_TEST_ADMISSIBLE_ENHANCM`) and "Detect customer modifications"
+  (`CL_CI_TEST_CUST_MODIFICATIONS`), with the same rule: note B, warning C, error D.
+- Proposal "Retire with BDEF": a behavior pool (class category 06) that did not run goes with
+  its behavior definition, not alone. `ZIF_CCR_ATC_READER~BEHAVIOR_POOLS` finds them.
+- `Z_CCR_READINESS` (version 1.4): a note above the list when the usage data covers less than a
+  year or is local data of this system.
+- `Z_CCR_PROBE` 1.4, part E: the tests of the check variant through the classic Code Inspector
+  API with their messages, class categories, enhancement implementations, findings per
+  exemption status.
+- `probes/zcl_ccr_test_levels.clas.abap`: a test object with ATC findings of a known kind, to
+  check the levels on a system.
+
+### Fixed
+
+- Objects the system generated (TADIR generation flag X or T, for example thousands of
+  `/1BCDWB/*` and `CLR_*` classes in `$TMP`) were listed as level A and proposed for
+  retirement. They are left out now.
+
+## [0.1.0] - 2026-11-27
+
 
 ### Added
 
@@ -59,15 +84,11 @@ All notable changes to this project are listed here. The format follows
   sorted table to a CHANGING parameter. The row is now handed over as a reference. The
   off-stack tests had not shown it, because the transpiler does not protect table keys.
 - `Z_CCR_PROBE` masks fields named `RESP*` as user names.
-- `Z_CCR_PROBE` 1.4, part E for version 0.2: the tests of the check variant through the classic
-  Code Inspector API with their descriptions and messages, class categories of the custom
-  classes (behavior pools), enhancement implementations in customer packages, findings of a
-  run per exemption status. Part D is off by default.
-- `probes/zcl_ccr_test_levels.clas.abap`: a test object that gives ATC findings of a known kind
-  (classic API, read and write of an SAP table, critical statements), to check the levels on a
-  system.
 - `Z_CCR_READINESS`: the value helps of run and usage data set failed. Their ID column had a
   built-in type; the value help reads its columns from the dictionary, so the ID has the type
   `SYSUUID_C32` now. A failing value help shows its return code instead of "No values".
 - `Z_CCR_READINESS`: the length of the selection texts in the program XML is the one the
   system writes (text plus 8), so abapGit shows no difference after a pull.
+
+[0.2.0]: https://github.com/Nexform/clean-core-readiness/compare/v0.1.0...v0.2.0
+[0.1.0]: https://github.com/Nexform/clean-core-readiness/releases/tag/v0.1.0

@@ -2,7 +2,7 @@
 
 Open-source ABAP tool that shows where the custom code of an SAP S/4HANA system stands on the clean core levels A–D, and which of that code is still in use.
 
-> **Status: release candidate 0.1.** All parts run on S/4HANA 2025 Private Edition and are being tested on that system before the release. See [Limits of version 0.1](#limits-of-version-01).
+> **Status: version 0.2.** Tested on S/4HANA 2025 Private Edition. See [Limits](#limits).
 
 ## What it does
 
@@ -15,16 +15,23 @@ The tool is read-only. It changes no custom code and deletes nothing.
 
 ## How an object gets its level
 
-The level comes from the ATC check "Usage of APIs" (`CL_YCM_CC_CHECK_API_USAGE`) and the message kind of its findings. The priority number is not used: it is configurable, and the clean core variant also holds checks that have nothing to do with the level.
+The level comes from the four clean core checks of the ATC variant and the message kind of their findings. The priority number is not used: it is configurable, and the clean core variant also holds checks that have nothing to do with the level.
 
-| Level | The custom code uses | Finding of "Usage of APIs" |
+| Check | Check class |
+|---|---|
+| Usage of APIs | `CL_YCM_CC_CHECK_API_USAGE` |
+| Critical statements | `CL_CI_TEST_CRITICAL_STATEMENTS` |
+| Allowed enhancement technologies | `CL_CI_TEST_ADMISSIBLE_ENHANCM` |
+| Detect customer modifications | `CL_CI_TEST_CUST_MODIFICATIONS` |
+
+| Level | The custom code uses, for example | Finding |
 |---|---|---|
 | A | Released APIs only | None |
-| B | Classic or deprecated APIs | Note (kind N) |
-| C | SAP internal objects, direct reads of SAP tables, `SUBMIT` | Warning (kind W) |
-| D | APIs that must not be used, writes to SAP tables, `PERFORM` in SAP programs | Error (kind E) |
+| B | Classic or deprecated APIs, `CALL TRANSACTION`, `GENERATE` | Note (kind N) |
+| C | SAP internal objects, direct reads of SAP tables, native SQL | Warning (kind W) |
+| D | APIs that must not be used, writes to SAP tables, modifications, enhancement technologies that are not allowed | Error (kind E) |
 
-An object takes the level of its worst finding. An object of the selected packages without any such finding is level A. Technical messages of the check (for example "object usage found") do not count.
+An object takes the level of its worst finding. An object of the selected packages without any such finding is level A. Technical messages of the checks (for example "object usage found") do not count.
 
 ## How the proposal is made
 
@@ -35,6 +42,8 @@ An object takes the level of its worst finding. An object of the selected packag
 | **Not used** | Retire | Retire | Retire |
 
 SUSG measures classes, function groups and programs. Every other object (CDS views, behavior definitions, interfaces, enhancements) has usage "unknown" and is never proposed for retirement.
+
+A behavior pool (the class of a RAP behavior definition) that did not run is proposed **Retire with BDEF**: it can only go together with its behavior definition.
 
 This rule is the proposal of this project, not an SAP rule. *Retire* marks a candidate; the owner of the code decides.
 
@@ -70,17 +79,17 @@ No ATC run yet? The two buttons at the top of the selection screen help: **How t
 
 ATC run, packages and usage data set are required; the report says so when one is missing.
 
-The ALV list shows one row per object: type, name, level, findings per level (B, C, D), usage state, executions, last use and proposal. Above the list: the ATC run and the period of the usage data. Export the list with the ALV toolbar (Export, Spreadsheet).
+The ALV list shows one row per object: type, name, level, findings per level (B, C, D), usage state, executions, last use and proposal. Above the list: the ATC run, the period of the usage data and a note when that data is weak ground for retirement (less than a year, or local data of this system). Objects the system generated (TADIR generation flag set) are left out. Export the list with the ALV toolbar (Export, Spreadsheet).
 
 How to run ATC with the clean core variant and how to read the result by hand: [Clean Core Readiness: a short guide](docs/guide.md).
 
-## Limits of version 0.1
+## Limits
 
-- Only the check "Usage of APIs" decides the level. The other three clean core checks (allowed enhancement technologies, customer modifications, critical statements) are not counted yet: their check classes could not be confirmed on the test system.
 - An ATC result does not list the objects it checked. The report takes the objects of the packages and object types you enter; they are the scope, and findings of objects outside them are left out. Enter the packages of the ATC run, or a part of them to assess that part.
-- *Retire* is proposed per object. Some objects cannot be retired alone, for example the behavior pool class of a RAP business object, which belongs to its behavior definition. Check such candidates with their parent object.
+- *Retire* is proposed per object. Behavior pools are marked *Retire with BDEF*; other parts of a larger object (for example the classes of an OData service) are not recognized yet.
 - Local usage data of a development system says little about production. Use usage data imported from production, covering a full business year.
-- Exempted ATC findings: not yet confirmed whether they are left out.
+- Exempted ATC findings: the test system had none, so it is not confirmed whether they are left out.
+- The three checks other than "Usage of APIs" are read from their message catalogs; on the test system they had findings only on a test object.
 
 ## Design
 
@@ -97,9 +106,10 @@ How to run ATC with the clean core variant and how to read the result by hand: [
 | ATC reader | Done |
 | SUSG reader | Done |
 | Report with ALV and spreadsheet export | Done |
-| System test and release 0.1 | In progress |
+| System test and release 0.1 | Done |
+| The other three clean core checks, behavior pools, generated objects, usage data notes (0.2) | Done |
+| Exempted findings | Planned |
 | Start an ATC run from the report | Planned |
-| The other three clean core checks | Planned |
 
 ## Contributing
 
