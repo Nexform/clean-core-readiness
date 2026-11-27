@@ -28,7 +28,7 @@ INTERFACE zif_ccr_atc_reader PUBLIC.
            ref_object_name TYPE string,
            successor       TYPE string,
          END OF finding_detail.
-  TYPES finding_details TYPE STANDARD TABLE OF finding_detail WITH EMPTY KEY.
+  TYPES finding_detail_list TYPE STANDARD TABLE OF finding_detail WITH EMPTY KEY.
   TYPES object_type_range TYPE RANGE OF trobjtype.
 
   "! The complete runs of a check variant, to choose the run to assess.
@@ -66,7 +66,7 @@ INTERFACE zif_ccr_atc_reader PUBLIC.
   METHODS finding_details
     IMPORTING object_type   TYPE zif_ccr_level_rules=>object_type
               object_name   TYPE zif_ccr_level_rules=>object_name
-    RETURNING VALUE(result) TYPE finding_details.
+    RETURNING VALUE(result) TYPE finding_detail_list.
 
   "! Returns the classes of a list that are behavior pools of a RAP behavior definition.
   "!
