@@ -625,6 +625,7 @@ CLASS lcl_alv IMPLEMENTATION.
                                          ( name = 'CHECK_NAME'      text = TEXT-c20 )
                                          ( name = 'CHECK_TITLE'     text = TEXT-c13 )
                                          ( name = 'CODE'            text = TEXT-c14 )
+                                         ( name = 'MESSAGE'         text = TEXT-c22 )
                                          ( name = 'KIND_TEXT'       text = TEXT-c21 )
                                          ( name = 'SUB_OBJECT'      text = TEXT-c15 )
                                          ( name = 'LINE'            text = TEXT-c16 )

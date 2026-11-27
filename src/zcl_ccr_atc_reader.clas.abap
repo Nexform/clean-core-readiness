@@ -1,9 +1,9 @@
 "! <p class="shorttext synchronized" lang="EN">Reads ATC results through the classic ATC API</p>
 "! Adapter of ZIF_CCR_ATC_READER. Runs come from the result header table SATC_AC_RESULTH,
-"! findings from CL_SATC_API_FACTORY, their attributes and check titles from
-"! CL_SATC_API_MAPPINGS, objects from TADIR, class categories from SEOCLASSDF - as confirmed
-"! by Z_CCR_PROBE on S/4HANA 2025. Keeps the findings of the run it read last, so the details
-"! of one object are read only when asked for.
+"! findings from CL_SATC_API_FACTORY, their attributes from CL_SATC_API_MAPPINGS, titles of
+"! checks and messages from CL_SATC_CI_CHECK_DIRECTORY, objects from TADIR, class categories
+"! from SEOCLASSDF - as confirmed on S/4HANA 2025 (Z_CCR_PROBE and SE24). Keeps the findings
+"! of the run it read last, so the details of one object are read only when asked for.
 CLASS zcl_ccr_atc_reader DEFINITION
   PUBLIC
   FINAL
@@ -19,11 +19,14 @@ CLASS zcl_ccr_atc_reader DEFINITION
              child  TYPE devclass,
            END OF package_link.
     TYPES package_links TYPE SORTED TABLE OF package_link WITH NON-UNIQUE KEY parent.
-    TYPES: BEGIN OF check_title,
-             check TYPE sci_chk,
-             title TYPE string,
-           END OF check_title.
-    TYPES check_titles TYPE HASHED TABLE OF check_title WITH UNIQUE KEY check.
+    "! Title of a check and text of one of its messages
+    TYPES: BEGIN OF message_text,
+             check   TYPE seoclsname,
+             code    TYPE sci_errc,
+             title   TYPE string,
+             message TYPE string,
+           END OF message_text.
+    TYPES message_texts TYPE HASHED TABLE OF message_text WITH UNIQUE KEY check code.
 
     "! Names of the finding attributes, as CL_SATC_API_MAPPINGS gives them (probe 1.3)
     CONSTANTS: BEGIN OF attribute,
@@ -35,8 +38,9 @@ CLASS zcl_ccr_atc_reader DEFINITION
     "! The findings of the run FINDINGS read last
     DATA last_findings TYPE scit_rest.
     DATA mappings TYPE REF TO cl_satc_api_mappings.
-    "! Titles of the checks asked for so far
-    DATA titles TYPE check_titles.
+    DATA check_directory TYPE REF TO if_satc_ci_check_directory.
+    "! Texts of the messages asked for so far
+    DATA texts TYPE message_texts.
 
     CONSTANTS whole_object TYPE tadir-pgmid VALUE 'R3TR'.
     "! Generation flag of an object that was not generated (domain GENFLAG). X (generated,
@@ -49,10 +53,11 @@ CLASS zcl_ccr_atc_reader DEFINITION
     "! Category of a behavior pool in SEOCLASSDF: the BPCL classes of probe 1.4 have it
     CONSTANTS behavior_pool_category TYPE seoclassdf-category VALUE '06'.
 
-    "! The title of a check, read once per check.
-    METHODS title_of
-      IMPORTING check         TYPE sci_chk
-      RETURNING VALUE(result) TYPE string.
+    "! Title of the check and text of the message, read once per check and message code.
+    METHODS text_of
+      IMPORTING check         TYPE seoclsname
+                code          TYPE sci_errc
+      RETURNING VALUE(result) TYPE message_text.
 
     "! The packages of the range and, level by level, all packages below them.
     METHODS with_subpackages
@@ -104,15 +109,19 @@ CLASS zcl_ccr_atc_reader IMPLEMENTATION.
   METHOD zif_ccr_atc_reader~finding_details.
     IF mappings IS NOT BOUND.
       mappings = NEW #( ).
+      check_directory = cl_satc_ci_check_directory=>get_check_directory( ).
     ENDIF.
 
     LOOP AT last_findings REFERENCE INTO DATA(finding)
          WHERE objtype = object_type AND objname = object_name.
       " the attributes are packed in the finding; unpacking them takes a moment, so only here
       DATA(attributes) = mappings->extract_attributes( finding->* ).
+      DATA(text) = text_of( check = finding->test
+                            code  = finding->code ).
       INSERT VALUE #( check_name      = finding->test
-                      check_title     = title_of( finding->test )
+                      check_title     = text-title
                       code            = finding->code
+                      message         = text-message
                       kind            = finding->kind
                       sub_object      = finding->sobjname
                       line            = finding->line
@@ -124,12 +133,21 @@ CLASS zcl_ccr_atc_reader IMPLEMENTATION.
   ENDMETHOD.
 
 
-  METHOD title_of.
-    IF NOT line_exists( titles[ check = check ] ).
-      INSERT VALUE #( check = check
-                      title = mappings->get_check_title( check ) ) INTO TABLE titles.
+  METHOD text_of.
+    IF line_exists( texts[ check = check code = code ] ).
+      result = texts[ check = check code = code ].
+      RETURN.
     ENDIF.
-    result = titles[ check = check ]-title.
+
+    check_directory->get_check_title_and_message( EXPORTING i_check         = check
+                                                            i_check_code    = code
+                                                  IMPORTING e_check_title   = DATA(title)
+                                                            e_check_message = DATA(message) ).
+    result = VALUE #( check   = check
+                      code    = code
+                      title   = title
+                      message = message ).
+    INSERT result INTO TABLE texts.
   ENDMETHOD.
 
 
