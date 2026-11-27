@@ -3,7 +3,7 @@
 *#      |\\/\\//\|        -----------------------------------      #*
 *#      |        |       /      Report: Z_CCR_PROBE          \     #*
 *#      |  (*) (*)      /                                     \    #*
-*#      |       __)    /        Version: 1.3 ()                \   #*
+*#      |       __)    /        Version: 1.4 ()                \   #*
 *#     (C    _____\   /         Magic. Do not touch.            \  #*
 *#       \  (__(   --{-------------------------------------------} #*
 *#       |    /       \         Created By : George Drakos      /  #*
@@ -23,6 +23,13 @@
 *&                  of START-OF-SELECTION                              *
 *& Author         : George Drakos                                      *
 *& Date           : 26/11/2026                                         *
+*& Change Request :                                                    *
+*&--------------------------------------------------------------------&*
+*& Description    : Probe E for version 0.2 - checks of the variant   *
+*&                  through CL_CI_CHECKVARIANT, class categories,      *
+*&                  enhancement implementations, exempted findings     *
+*& Author         : George Drakos                                      *
+*& Date           : 27/11/2026                                         *
 *& Change Request :                                                    *
 *&--------------------------------------------------------------------&*
 *& Description    : Check variant read through the API factory, its   *
@@ -450,9 +457,12 @@ CLASS lcl_reader_probe DEFINITION FINAL CREATE PUBLIC.
     INTERFACES lif_probe.
 
     TYPES: BEGIN OF reader_settings,
-             result_id     TYPE string,
-             check_variant TYPE string,
-             sample_size   TYPE i,
+             result_id       TYPE string,
+             check_variant   TYPE string,
+             sample_size     TYPE i,
+             with_reader     TYPE abap_bool,
+             with_checks     TYPE abap_bool,
+             package_pattern TYPE string,
            END OF reader_settings.
 
     METHODS constructor
@@ -462,6 +472,11 @@ CLASS lcl_reader_probe DEFINITION FINAL CREATE PUBLIC.
 
   PRIVATE SECTION.
     TYPES sample_keys TYPE SORTED TABLE OF string WITH UNIQUE KEY table_line.
+    TYPES: BEGIN OF status_count,
+             status   TYPE string,
+             findings TYPE i,
+           END OF status_count.
+    TYPES status_counts TYPE SORTED TABLE OF status_count WITH UNIQUE KEY status.
     TYPES: BEGIN OF tag_count,
              tag         TYPE string,
              occurrences TYPE i,
@@ -501,6 +516,76 @@ CLASS lcl_reader_probe DEFINITION FINAL CREATE PUBLIC.
     DATA settings TYPE reader_settings.
 
     METHODS choose_result.
+    CONSTANTS checks_section TYPE string VALUE `E CHECKS`.
+    CONSTANTS: BEGIN OF classic,
+                 variant      TYPE c LENGTH 30 VALUE 'CL_CI_CHECKVARIANT',
+                 get_ref      TYPE c LENGTH 30 VALUE 'GET_REF',
+                 get_info     TYPE c LENGTH 30 VALUE 'GET_INFO',
+                 tests        TYPE c LENGTH 30 VALUE 'VARIANT',
+                 test_name    TYPE c LENGTH 30 VALUE 'TESTNAME',
+                 description  TYPE c LENGTH 30 VALUE 'DESCRIPTION',
+                 user_param   TYPE c LENGTH 30 VALUE 'P_USER',
+                 name_param   TYPE c LENGTH 30 VALUE 'P_NAME',
+                 result_param TYPE c LENGTH 30 VALUE 'P_REF',
+               END OF classic.
+    CONSTANTS enhancement_type TYPE string VALUE `ENHO`.
+    CONSTANTS max_classes TYPE i VALUE 150.
+    CONSTANTS max_enhancements TYPE i VALUE 30.
+
+    "! Part D: what the ATC reader of slice 3 needs.
+    METHODS run_reader.
+
+    "! Part E: the checks of the variant, class categories, enhancements and exemptions.
+    METHODS run_checks.
+
+    "! The tests of the check variant through the classic Code Inspector API, and for each its
+    "! description and message catalog.
+    METHODS report_variant_tests.
+
+    "! The classic check variant object with its tests read; unbound when it cannot be read.
+    METHODS classic_variant_ref
+      RETURNING VALUE(result) TYPE REF TO object
+      RAISING   cx_static_check.
+
+    "! A data object of the type of a method parameter, for a dynamic call.
+    METHODS parameter_value
+      IMPORTING class_type    TYPE REF TO cl_abap_objectdescr
+                method        TYPE csequence
+                parameter     TYPE csequence
+      RETURNING VALUE(result) TYPE REF TO data.
+
+    "! The tests of the variant, then description and messages of each.
+    METHODS report_tests_of
+      IMPORTING subject TYPE csequence
+                tests   TYPE ANY TABLE.
+
+    "! Bindings for GET_REF: user (initial: a global variant), name, result, and every other
+    "! parameter that is not optional.
+    METHODS variant_bindings
+      IMPORTING class_type    TYPE REF TO cl_abap_objectdescr
+      RETURNING VALUE(result) TYPE abap_parmbind_tab.
+
+    "! The kind of a parameter seen from the caller: what the method imports, the caller exports.
+    METHODS caller_kind
+      IMPORTING parameter_kind TYPE abap_parmkind
+      RETURNING VALUE(result)  TYPE abap_parmkind.
+
+    METHODS report_test
+      IMPORTING test_class TYPE csequence.
+
+    "! Class categories of the classes in the packages of P_PKGP, to tell behavior pools apart.
+    METHODS report_class_categories.
+
+    "! Enhancement implementations in customer packages and in the packages of P_PKGP.
+    METHODS report_enhancements.
+
+    "! Findings of the run per exemption status, and a few exempted ones.
+    METHODS report_exemptions.
+
+    METHODS count_by_status
+      IMPORTING findings      TYPE if_satc_api_result=>ty_findings
+      RETURNING VALUE(result) TYPE status_counts.
+
     METHODS report_signatures.
     METHODS report_variant_checks.
     METHODS report_check_classes.
@@ -578,6 +663,8 @@ CLASS lcl_application DEFINITION FINAL CREATE PUBLIC.
              reads_messages TYPE abap_bool,
              probes_usage   TYPE abap_bool,
              probes_reader  TYPE abap_bool,
+             probes_checks  TYPE abap_bool,
+             code_packages  TYPE string,
              check_variant  TYPE string,
              sample_size    TYPE i,
              masks_users    TYPE abap_bool,
@@ -645,12 +732,21 @@ SELECTION-SCREEN END OF BLOCK sc_brel.
 
 SELECTION-SCREEN BEGIN OF BLOCK sc_brdr WITH FRAME TITLE sc_trdr.
 SELECTION-SCREEN BEGIN OF LINE.
-PARAMETERS p_rdr AS CHECKBOX DEFAULT 'X'.
+PARAMETERS p_rdr AS CHECKBOX.
 SELECTION-SCREEN COMMENT 3(66) sc_crdr FOR FIELD p_rdr.
 SELECTION-SCREEN END OF LINE.
 SELECTION-SCREEN COMMENT /1(70) sc_cchkv.
 PARAMETERS p_chkv TYPE c LENGTH 30 DEFAULT 'ABAP_CLEAN_CORE_DEVELOPMENT'.
 SELECTION-SCREEN END OF BLOCK sc_brdr.
+
+SELECTION-SCREEN BEGIN OF BLOCK sc_bchk WITH FRAME TITLE sc_tchk.
+SELECTION-SCREEN BEGIN OF LINE.
+PARAMETERS p_chk AS CHECKBOX DEFAULT 'X'.
+SELECTION-SCREEN COMMENT 3(66) sc_cchk FOR FIELD p_chk.
+SELECTION-SCREEN END OF LINE.
+SELECTION-SCREEN COMMENT /1(70) sc_cpkp.
+PARAMETERS p_pkgp TYPE c LENGTH 30.
+SELECTION-SCREEN END OF BLOCK sc_bchk.
 
 SELECTION-SCREEN BEGIN OF BLOCK sc_bout WITH FRAME TITLE sc_tout.
 SELECTION-SCREEN COMMENT /1(70) sc_crows.
@@ -686,6 +782,8 @@ START-OF-SELECTION.
                                 reads_messages = p_msgs
                                 probes_usage   = p_susg
                                 probes_reader  = p_rdr
+                                probes_checks  = p_chk
+                                code_packages  = p_pkgp
                                 check_variant  = p_chkv
                                 sample_size    = p_rows
                                 masks_users    = p_mask
@@ -1595,6 +1693,15 @@ CLASS lcl_reader_probe IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD lif_probe~run.
+    IF settings-with_reader = abap_true.
+      run_reader( ).
+    ENDIF.
+    IF settings-with_checks = abap_true.
+      run_checks( ).
+    ENDIF.
+  ENDMETHOD.
+
+  METHOD run_reader.
     output->begin_section( section_name ).
     report_signatures( ).
     report_variant_checks( ).
@@ -1620,6 +1727,223 @@ CLASS lcl_reader_probe IMPLEMENTATION.
     report_classic_attributes( findings ).
     report_api_attributes( ).
     report_result_content( findings ).
+  ENDMETHOD.
+
+  METHOD run_checks.
+    output->begin_section( checks_section ).
+    report_variant_tests( ).
+    report_class_categories( ).
+    report_enhancements( ).
+    choose_result( ).
+    IF settings-result_id IS NOT INITIAL.
+      report_exemptions( ).
+    ENDIF.
+  ENDMETHOD.
+
+  METHOD report_variant_tests.
+    FIELD-SYMBOLS <tests> TYPE ANY TABLE.
+
+    DATA(subject) = |{ classic-variant } { settings-check_variant }|.
+    TRY.
+        DATA(variant) = classic_variant_ref( ).
+        IF variant IS NOT BOUND.
+          RETURN.
+        ENDIF.
+        ASSIGN variant->(classic-tests) TO <tests>.
+        IF sy-subrc <> 0.
+          output->add( subject = subject
+                       item    = lcl_output=>label-missing ).
+          RETURN.
+        ENDIF.
+        report_tests_of( subject = subject
+                         tests   = <tests> ).
+      CATCH cx_root INTO DATA(failure).
+        output->add_failure( subject = subject
+                             failure = failure ).
+    ENDTRY.
+  ENDMETHOD.
+
+  METHOD report_tests_of.
+    output->add_rows( subject  = subject
+                      rows     = tests
+                      max_rows = max_messages ).
+    LOOP AT tests ASSIGNING FIELD-SYMBOL(<test>).
+      ASSIGN COMPONENT classic-test_name OF STRUCTURE <test> TO FIELD-SYMBOL(<test_name>).
+      IF sy-subrc = 0.
+        report_test( text_of( <test_name> ) ).
+      ENDIF.
+    ENDLOOP.
+  ENDMETHOD.
+
+  METHOD classic_variant_ref.
+    DATA(class_type) = catalog->object_descriptor( classic-variant ).
+    IF class_type IS NOT BOUND OR NOT line_exists( class_type->methods[ name = classic-get_ref ] ).
+      RETURN.
+    ENDIF.
+
+    DATA(parameters) = variant_bindings( class_type ).
+    DATA(result_value) = VALUE #( parameters[ name = classic-result_param ] OPTIONAL ).
+    DATA(exceptions) = VALUE abap_excpbind_tab( ( name = 'OTHERS' value = 1 ) ).
+    CALL METHOD (classic-variant)=>(classic-get_ref)
+      PARAMETER-TABLE parameters
+      EXCEPTION-TABLE exceptions.
+    IF sy-subrc <> 0 OR result_value-value IS NOT BOUND.
+      output->add( subject = |{ classic-variant }=>{ classic-get_ref }|
+                   item    = settings-check_variant
+                   content = |sy-subrc { sy-subrc }| ).
+      RETURN.
+    ENDIF.
+    ASSIGN result_value-value->* TO FIELD-SYMBOL(<variant>).
+    result ?= <variant>.
+
+    " the tests of the variant are read into its attribute VARIANT
+    CALL METHOD result->(classic-get_info)
+      EXCEPTIONS
+        OTHERS = 1.
+    IF sy-subrc <> 0.
+      output->add( subject = |{ classic-variant }->{ classic-get_info }|
+                   item    = settings-check_variant
+                   content = |sy-subrc { sy-subrc }| ).
+      CLEAR result.
+    ENDIF.
+  ENDMETHOD.
+
+  METHOD variant_bindings.
+    LOOP AT class_type->methods[ name = classic-get_ref ]-parameters REFERENCE INTO DATA(parameter)
+         WHERE name = classic-user_param OR name = classic-name_param OR name = classic-result_param
+            OR is_optional = abap_false.
+      DATA(binding) = VALUE abap_parmbind( name  = parameter->name
+                                           kind  = caller_kind( parameter->parm_kind )
+                                           value = parameter_value( class_type = class_type
+                                                                    method     = classic-get_ref
+                                                                    parameter  = parameter->name ) ).
+      IF parameter->name = classic-name_param AND binding-value IS BOUND.
+        ASSIGN binding-value->* TO FIELD-SYMBOL(<name>).
+        <name> = settings-check_variant.
+      ENDIF.
+      INSERT binding INTO TABLE result.
+    ENDLOOP.
+  ENDMETHOD.
+
+  METHOD parameter_value.
+    DATA parameter_type TYPE REF TO cl_abap_datadescr.
+
+    class_type->get_method_parameter_type( EXPORTING  p_method_name    = method
+                                                      p_parameter_name = parameter
+                                           RECEIVING  p_descr_ref      = parameter_type
+                                           EXCEPTIONS OTHERS           = 1 ).
+    IF sy-subrc = 0.
+      CREATE DATA result TYPE HANDLE parameter_type.
+    ENDIF.
+  ENDMETHOD.
+
+  METHOD caller_kind.
+    result = SWITCH #( parameter_kind
+                       WHEN cl_abap_objectdescr=>importing THEN cl_abap_objectdescr=>exporting
+                       WHEN cl_abap_objectdescr=>exporting THEN cl_abap_objectdescr=>importing
+                       ELSE parameter_kind ).
+  ENDMETHOD.
+
+  METHOD report_test.
+    DATA test TYPE REF TO object.
+    FIELD-SYMBOLS <description> TYPE any.
+    FIELD-SYMBOLS <messages> TYPE ANY TABLE.
+
+    TRY.
+        CREATE OBJECT test TYPE (test_class).
+        ASSIGN test->(classic-description) TO <description>.
+        IF sy-subrc = 0.
+          output->add( subject = |TEST { test_class }|
+                       item    = classic-description
+                       content = text_of( <description> ) ).
+        ENDIF.
+        ASSIGN test->(api-message_table) TO <messages>.
+        IF sy-subrc = 0.
+          output->add_rows( subject  = |TEST { test_class }->{ api-message_table }|
+                            rows     = <messages>
+                            max_rows = max_messages ).
+        ENDIF.
+      CATCH cx_root INTO DATA(failure).
+        output->add_failure( subject = |TEST { test_class }|
+                             failure = failure ).
+    ENDTRY.
+  ENDMETHOD.
+
+  METHOD report_class_categories.
+    DATA(subject) = `Class categories (SEOCLASSDF)`.
+    IF settings-package_pattern IS INITIAL.
+      output->add( subject = subject
+                   item    = lcl_output=>label-missing
+                   content = `P_PKGP is empty` ).
+      RETURN.
+    ENDIF.
+
+    DATA(names) = catalog->object_names(
+                      VALUE #( packages     = lcl_catalog=>packages_like( VALUE #( ( settings-package_pattern ) ) )
+                               object_types = lcl_catalog=>types_of( VALUE #( ( class_type ) ) ) ) ).
+    DATA(quoted) = VALUE string_table( FOR name IN names FROM 1 TO max_classes
+                                       ( cl_abap_dyn_prg=>quote( name ) ) ).
+    IF quoted IS INITIAL.
+      output->add( subject = subject
+                   item    = lcl_output=>label-row_count
+                   content = `0` ).
+      RETURN.
+    ENDIF.
+    catalog->run_query( VALUE #( subject    = subject
+                                 source     = `SEOCLASSDF`
+                                 field_list = `CLSNAME, CATEGORY`
+                                 condition  = |VERSION = '1' AND CLSNAME IN ( { concat_lines_of( table = quoted
+                                                                                                 sep   = `, ` ) } )|
+                                 sort_order = `CATEGORY, CLSNAME`
+                                 max_rows   = max_classes ) ).
+  ENDMETHOD.
+
+  METHOD report_enhancements.
+    DATA(patterns) = VALUE string_table( ( `Z*` ) ( `Y*` ) ).
+    IF settings-package_pattern IS NOT INITIAL.
+      INSERT settings-package_pattern INTO TABLE patterns.
+    ENDIF.
+
+    DATA(names) = catalog->object_names(
+                      VALUE #( packages     = lcl_catalog=>packages_like( patterns )
+                               object_types = lcl_catalog=>types_of( VALUE #( ( enhancement_type ) ) ) ) ).
+    DATA(subject) = |Enhancement implementations ({ enhancement_type })|.
+    output->add( subject = subject
+                 item    = lcl_output=>label-row_count
+                 content = |{ lines( names ) }| ).
+    LOOP AT names INTO DATA(name) TO max_enhancements.
+      output->add( subject = subject
+                   item    = name ).
+    ENDLOOP.
+  ENDMETHOD.
+
+  METHOD report_exemptions.
+    DATA(subject) = `Findings by EXEMPTION_STATUS`.
+    TRY.
+        output->add_rows( subject  = subject
+                          rows     = count_by_status( api_findings( ) )
+                          max_rows = max_messages ).
+      CATCH cx_root INTO DATA(failure).
+        output->add_failure( subject = subject
+                             failure = failure ).
+    ENDTRY.
+  ENDMETHOD.
+
+  METHOD count_by_status.
+    LOOP AT findings REFERENCE INTO DATA(finding).
+      DATA(status) = text_of( finding->exemption_status ).
+      READ TABLE result WITH TABLE KEY status = status ASSIGNING FIELD-SYMBOL(<count>).
+      IF sy-subrc <> 0.
+        INSERT VALUE #( status = status ) INTO TABLE result ASSIGNING <count>.
+      ENDIF.
+      <count>-findings = <count>-findings + 1.
+      " a few exempted findings by name, to see what an exemption looks like
+      IF status IS NOT INITIAL AND <count>-findings <= max_samples.
+        output->add( subject = `Exempted finding`
+                     item    = |{ text_of( finding->check ) } { text_of( finding->code ) }|
+                     content = |{ text_of( finding->object ) } { status }| ).
+      ENDIF.
+    ENDLOOP.
   ENDMETHOD.
 
   METHOD report_signatures.
@@ -2015,6 +2339,9 @@ CLASS lcl_application IMPLEMENTATION.
     sc_trdr  = 'D - ATC reader (slice 3)'.
     sc_crdr  = 'Finding attributes, variant checks, stored content of the run'.
     sc_cchkv = 'Check variant (P_CHKV) - with P_RESID empty: its newest run'.
+    sc_tchk  = 'E - checks of the variant, class categories, exemptions (0.2)'.
+    sc_cchk  = 'Variant tests and messages, behavior pools, ENHO, exemptions'.
+    sc_cpkp  = 'Package pattern of custom code (P_PKGP), e.g. Z_SALES*'.
     sc_tout  = 'Output'.
     sc_crows = 'Sample rows per table (P_ROWS):'.
     sc_cmask = 'Mask user names in sample rows'.
@@ -2096,10 +2423,13 @@ CLASS lcl_application IMPLEMENTATION.
       INSERT CAST lif_probe( NEW lcl_usage_probe( output  = output
                                                   catalog = catalog ) ) INTO TABLE result.
     ENDIF.
-    IF selection-probes_reader = abap_true.
-      DATA(reader_settings) = VALUE lcl_reader_probe=>reader_settings( result_id     = selection-result_id
-                                                                       check_variant = selection-check_variant
-                                                                       sample_size   = selection-sample_size ).
+    IF selection-probes_reader = abap_true OR selection-probes_checks = abap_true.
+      DATA(reader_settings) = VALUE lcl_reader_probe=>reader_settings( result_id       = selection-result_id
+                                                                       check_variant   = selection-check_variant
+                                                                       sample_size     = selection-sample_size
+                                                                       with_reader     = selection-probes_reader
+                                                                       with_checks     = selection-probes_checks
+                                                                       package_pattern = selection-code_packages ).
       INSERT CAST lif_probe( NEW lcl_reader_probe( output   = output
                                                    catalog  = catalog
                                                    settings = reader_settings ) ) INTO TABLE result.
