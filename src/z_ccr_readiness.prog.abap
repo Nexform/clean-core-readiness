@@ -3,7 +3,7 @@
 *#      |\\/\\//\|        -----------------------------------      #*
 *#      |        |       /      Report: Z_CCR_READINESS      \     #*
 *#      |  (*) (*)      /                                     \    #*
-*#      |       __)    /        Version: 1.1 ()                \   #*
+*#      |       __)    /        Version: 1.2 ()                \   #*
 *#     (C    _____\   /         Magic. Do not touch.            \  #*
 *#       \  (__(   --{-------------------------------------------} #*
 *#       |    /       \         Created By : George Drakos      /  #*
@@ -29,6 +29,13 @@
 *&                  failure of the value help told apart from no values*
 *& Author         : George Drakos                                      *
 *& Date           : 26/11/2026                                         *
+*& Change Request :                                                    *
+*&--------------------------------------------------------------------&*
+*& Description    : Pushbuttons for the steps to run ATC and a jump to *
+*&                  transaction ATC; required fields checked in the    *
+*&                  report, so the buttons work on an empty screen     *
+*& Author         : George Drakos                                      *
+*& Date           : 27/11/2026                                         *
 *& Change Request :                                                    *
 *&--------------------------------------------------------------------&*
 REPORT z_ccr_readiness.
@@ -91,6 +98,39 @@ CLASS lcl_value_help DEFINITION FINAL CREATE PUBLIC.
       IMPORTING value_column TYPE dfies-fieldname
                 screen_field TYPE dynpread-fieldname
       CHANGING  values       TYPE STANDARD TABLE.
+
+ENDCLASS.
+
+*&----------------------------------------------------------------------*
+*&CLASS lcl_atc_guide DEFINITION
+*&----------------------------------------------------------------------*
+"! Help for users without an ATC run yet: the steps to run ATC with the clean core variant, and
+"! a jump to transaction ATC. The report itself starts no ATC run.
+CLASS lcl_atc_guide DEFINITION FINAL CREATE PUBLIC.
+
+  PUBLIC SECTION.
+    CONSTANTS: BEGIN OF command,
+                 show_steps TYPE sy-ucomm VALUE 'ATC_STEPS',
+                 open_atc   TYPE sy-ucomm VALUE 'ATC_OPEN',
+               END OF command.
+
+    "! Reacts to the pushbuttons of the selection screen; other commands are left alone.
+    CLASS-METHODS on_command
+      IMPORTING command TYPE sy-ucomm.
+
+  PRIVATE SECTION.
+    TYPES: BEGIN OF step,
+             step TYPE i,
+             text TYPE string,
+           END OF step.
+    TYPES steps TYPE STANDARD TABLE OF step WITH EMPTY KEY.
+
+    CONSTANTS atc_transaction TYPE sy-tcode VALUE 'ATC'.
+
+    "! Shows the steps in a popup list.
+    CLASS-METHODS show_steps.
+
+    CLASS-METHODS open_atc.
 
 ENDCLASS.
 
@@ -172,21 +212,30 @@ ENDCLASS.
 *&---------------------------------------------------------------------*
 *& SELECTION SCREEN DESIGN
 *&---------------------------------------------------------------------*
+SELECTION-SCREEN BEGIN OF BLOCK b03 WITH FRAME TITLE TEXT-b03.
+SELECTION-SCREEN PUSHBUTTON /1(30) sc_steps USER-COMMAND atc_steps.
+SELECTION-SCREEN PUSHBUTTON 33(30) sc_atc USER-COMMAND atc_open.
+SELECTION-SCREEN END OF BLOCK b03.
+
+" no field is OBLIGATORY: a pushbutton would then only work once every field is filled in,
+" and the ATC help is needed before there is a run to enter
 SELECTION-SCREEN BEGIN OF BLOCK b01 WITH FRAME TITLE TEXT-b01.
-PARAMETERS p_chkv TYPE satc_ac_resulth-chk_profile_name DEFAULT 'ABAP_CLEAN_CORE_DEVELOPMENT' OBLIGATORY.
-PARAMETERS p_run TYPE sysuuid_c32 OBLIGATORY.
-SELECT-OPTIONS s_pack FOR package_name OBLIGATORY.
+PARAMETERS p_chkv TYPE satc_ac_resulth-chk_profile_name DEFAULT 'ABAP_CLEAN_CORE_DEVELOPMENT'.
+PARAMETERS p_run TYPE sysuuid_c32.
+SELECT-OPTIONS s_pack FOR package_name.
 SELECT-OPTIONS s_type FOR object_type.
 SELECTION-SCREEN END OF BLOCK b01.
 
 SELECTION-SCREEN BEGIN OF BLOCK b02 WITH FRAME TITLE TEXT-b02.
-PARAMETERS p_usage TYPE sysuuid_c32 OBLIGATORY.
+PARAMETERS p_usage TYPE sysuuid_c32.
 SELECTION-SCREEN END OF BLOCK b02.
 
 *&---------------------------------------------------------------------*
 *& INITIALIZATION OF SELECTION SCREEN ELEMENTS
 *&---------------------------------------------------------------------*
 INITIALIZATION.
+  sc_steps = TEXT-p01.
+  sc_atc  = TEXT-p02.
   " object types that carry code; other types have no clean core finding and would all be level A
   s_type[] = VALUE #( sign   = 'I'
                       option = 'EQ'
@@ -197,6 +246,12 @@ INITIALIZATION.
                       ( low = 'DDLS' )
                       ( low = 'BDEF' )
                       ( low = 'ENHO' ) ).
+
+*&---------------------------------------------------------------------*
+*& AT SELECTION SCREEN
+*&---------------------------------------------------------------------*
+AT SELECTION-SCREEN.
+  lcl_atc_guide=>on_command( sy-ucomm ).
 
 *&---------------------------------------------------------------------*
 *& AT SELECTION SCREEN ON VALUE REQUESTS (F4)
@@ -301,6 +356,60 @@ CLASS lcl_value_help IMPLEMENTATION.
 ENDCLASS.
 
 *&----------------------------------------------------------------------*
+*&CLASS lcl_atc_guide IMPLEMENTATION
+*&----------------------------------------------------------------------*
+CLASS lcl_atc_guide IMPLEMENTATION.
+
+  METHOD on_command.
+    CASE command.
+      WHEN lcl_atc_guide=>command-show_steps.
+        show_steps( ).
+      WHEN lcl_atc_guide=>command-open_atc.
+        open_atc( ).
+      WHEN OTHERS.
+        RETURN.
+    ENDCASE.
+  ENDMETHOD.
+
+
+  METHOD show_steps.
+    DATA(steps) = VALUE steps( ( step = 1 text = TEXT-s01 )
+                               ( step = 2 text = TEXT-s02 )
+                               ( step = 3 text = TEXT-s03 )
+                               ( step = 4 text = TEXT-s04 )
+                               ( step = 5 text = TEXT-s05 )
+                               ( step = 6 text = TEXT-s06 )
+                               ( step = 7 text = TEXT-s07 )
+                               ( step = 8 text = TEXT-s08 ) ).
+    TRY.
+        cl_salv_table=>factory( IMPORTING r_salv_table = DATA(alv)
+                                CHANGING  t_table      = steps ).
+        alv->get_display_settings( )->set_list_header( CONV #( TEXT-t01 ) ).
+        alv->get_columns( )->set_optimize( ).
+        alv->get_columns( )->get_column( 'STEP' )->set_medium_text( CONV #( TEXT-c11 ) ).
+        alv->get_columns( )->get_column( 'TEXT' )->set_medium_text( CONV #( TEXT-c12 ) ).
+        alv->set_screen_popup( start_column = 5
+                               end_column   = 150
+                               start_line   = 3
+                               end_line     = 14 ).
+        alv->display( ).
+      CATCH cx_salv_msg cx_salv_not_found INTO DATA(failure).
+        MESSAGE failure TYPE 'S' DISPLAY LIKE 'E'.
+    ENDTRY.
+  ENDMETHOD.
+
+
+  METHOD open_atc.
+    TRY.
+        CALL TRANSACTION atc_transaction WITH AUTHORITY-CHECK.
+      CATCH cx_sy_authorization_error.
+        MESSAGE TEXT-e07 TYPE 'S' DISPLAY LIKE 'E'.
+    ENDTRY.
+  ENDMETHOD.
+
+ENDCLASS.
+
+*&----------------------------------------------------------------------*
 *&CLASS lcl_alv IMPLEMENTATION
 *&----------------------------------------------------------------------*
 CLASS lcl_alv IMPLEMENTATION.
@@ -380,6 +489,11 @@ CLASS lcl_application IMPLEMENTATION.
 
 
   METHOD run.
+    IF selection-run_id IS INITIAL OR selection-packages IS INITIAL OR selection-usage_id IS INITIAL.
+      MESSAGE TEXT-e06 TYPE 'S' DISPLAY LIKE 'E'.
+      RETURN.
+    ENDIF.
+
     DATA(atc_run) = chosen_run( ).
     IF atc_run IS INITIAL.
       MESSAGE TEXT-e01 TYPE 'S' DISPLAY LIKE 'E'.

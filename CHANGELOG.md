@@ -37,6 +37,17 @@ All notable changes to this project are listed here. The format follows
   the stored content of a run (whether it lists the checked objects).
 - Guide to the method: `docs/guide.md`.
 
+### Changed
+
+- `Z_CCR_READINESS`: two pushbuttons on the selection screen, "How to run ATC" (the steps to run
+  ATC with the clean core variant, in a popup) and "Open transaction ATC". The input fields are
+  no longer OBLIGATORY, so the buttons work on an empty screen; the report checks that run,
+  packages and usage data set are filled in.
+- README: installation, usage of `Z_CCR_READINESS`, the level from the message kind of "Usage
+  of APIs", usage state "unknown", limits of version 0.1.
+- Guide: level from the message kind instead of the priority, steps to read the result,
+  usage per procedure and "usage unknown", new pitfalls, open points confirmed on S/4HANA 2025.
+
 ### Fixed
 
 - `ZCL_CCR_CLASSIFIER` raised `CX_SY_DYN_CALL_ILLEGAL_TYPE` in a system: it passed a row of a
