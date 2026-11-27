@@ -143,8 +143,9 @@ ENDCLASS.
 *&----------------------------------------------------------------------*
 *&CLASS lcl_alv DEFINITION
 *&----------------------------------------------------------------------*
-"! Shows the assessment as ALV list, with the ATC run and the usage period above it.
-"! The ALV toolbar exports the list to a spreadsheet.
+"! Shows the assessment as ALV list, with the ATC run and the usage period above it, and a
+"! note when the usage data is weak ground for retirement. The ALV toolbar exports the list
+"! to a spreadsheet.
 CLASS lcl_alv DEFINITION FINAL CREATE PUBLIC.
 
   PUBLIC SECTION.
@@ -160,6 +161,11 @@ CLASS lcl_alv DEFINITION FINAL CREATE PUBLIC.
              text TYPE scrtext_m,
            END OF column_text.
     TYPES column_texts TYPE STANDARD TABLE OF column_text WITH EMPTY KEY.
+
+    "! Usage data of less than a year can miss jobs that run once a year
+    CONSTANTS days_of_a_year TYPE i VALUE 365.
+    "! Kind of a usage data set collected in this system (SUSG_ADMIN-KIND)
+    CONSTANTS local_data TYPE susg_admin-kind VALUE 'L'.
 
     "! The rows the ALV shows - they live as long as the list
     DATA rows TYPE output_rows.
@@ -478,6 +484,24 @@ CLASS lcl_alv IMPLEMENTATION.
                          column = 2
                          text   = |{ data_set-description }: { data_set-date_from DATE = USER } - |
                                && |{ data_set-date_to DATE = USER }, { data_set-days_available } days| ).
+
+    " notes on the usage data: both weaken a proposal to retire
+    DATA(notes) = VALUE string_table( ( COND #( WHEN data_set-days_available < days_of_a_year
+                                                THEN CONV #( TEXT-h04 ) ) )
+                                      ( COND #( WHEN data_set-kind = local_data
+                                                THEN CONV #( TEXT-h05 ) ) ) ).
+    DELETE notes WHERE table_line IS INITIAL.
+    LOOP AT notes REFERENCE INTO DATA(note).
+      DATA(row) = 2 + sy-tabix.
+      IF sy-tabix = 1.
+        result->create_label( row    = row
+                              column = 1
+                              text   = TEXT-h03 ).
+      ENDIF.
+      result->create_text( row    = row
+                           column = 2
+                           text   = note->* ).
+    ENDLOOP.
   ENDMETHOD.
 
 ENDCLASS.
