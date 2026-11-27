@@ -1,7 +1,7 @@
 "! <p class="shorttext synchronized" lang="EN">Reads ATC results through the classic ATC API</p>
 "! Adapter of ZIF_CCR_ATC_READER. Runs come from the result header table SATC_AC_RESULTH,
-"! findings from CL_SATC_API_FACTORY, objects from TADIR - as confirmed by Z_CCR_PROBE on
-"! S/4HANA 2025.
+"! findings from CL_SATC_API_FACTORY, objects from TADIR, class categories from SEOCLASSDF -
+"! as confirmed by Z_CCR_PROBE on S/4HANA 2025.
 CLASS zcl_ccr_atc_reader DEFINITION
   PUBLIC
   FINAL
@@ -19,6 +19,11 @@ CLASS zcl_ccr_atc_reader DEFINITION
     TYPES package_links TYPE SORTED TABLE OF package_link WITH NON-UNIQUE KEY parent.
 
     CONSTANTS whole_object TYPE tadir-pgmid VALUE 'R3TR'.
+    CONSTANTS class_type TYPE zif_ccr_level_rules=>object_type VALUE 'CLAS'.
+    "! Active version of a class in SEOCLASSDF
+    CONSTANTS active_version TYPE seoclassdf-version VALUE '1'.
+    "! Category of a behavior pool in SEOCLASSDF: the BPCL classes of probe 1.4 have it
+    CONSTANTS behavior_pool_category TYPE seoclassdf-category VALUE '06'.
 
     "! The packages of the range and, level by level, all packages below them.
     METHODS with_subpackages
@@ -63,6 +68,22 @@ CLASS zcl_ccr_atc_reader IMPLEMENTATION.
                         check_name  = atc_finding-test
                         code        = atc_finding-code
                         kind        = atc_finding-kind ) ).
+  ENDMETHOD.
+
+
+  METHOD zif_ccr_atc_reader~behavior_pools.
+    IF objects IS INITIAL.
+      RETURN.
+    ENDIF.
+
+    SELECT FROM @objects AS checked INNER JOIN seoclassdf AS class
+        ON class~clsname = checked~object_name
+      FIELDS checked~object_type, checked~object_name
+      WHERE checked~object_type = @class_type
+        AND class~version       = @active_version
+        AND class~category      = @behavior_pool_category
+      ORDER BY checked~object_type, checked~object_name
+      INTO TABLE @result.
   ENDMETHOD.
 
 

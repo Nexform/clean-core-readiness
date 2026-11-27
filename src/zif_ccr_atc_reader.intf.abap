@@ -43,4 +43,12 @@ INTERFACE zif_ccr_atc_reader PUBLIC.
               object_types  TYPE object_type_range OPTIONAL
     RETURNING VALUE(result) TYPE zif_ccr_classifier=>object_keys.
 
+  "! Returns the classes of a list that are behavior pools of a RAP behavior definition.
+  "!
+  "! @parameter objects | Objects of any type - only classes are looked at
+  "! @parameter result  | The behavior pools among them
+  METHODS behavior_pools
+    IMPORTING objects       TYPE zif_ccr_classifier=>object_keys
+    RETURNING VALUE(result) TYPE zif_ccr_classifier=>object_keys.
+
 ENDINTERFACE.

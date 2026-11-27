@@ -26,6 +26,7 @@ CLASS zcl_ccr_assessor DEFINITION
     METHODS proposal_for
       IMPORTING level         TYPE zif_ccr_level_rules=>clean_core_level
                 usage_state   TYPE zif_ccr_assessor=>usage_state_code
+                behavior_pool TYPE abap_bool
       RETURNING VALUE(result) TYPE zif_ccr_assessor=>proposal_code.
 
 ENDCLASS.
@@ -43,8 +44,11 @@ CLASS zcl_ccr_assessor IMPLEMENTATION.
       assessment-last_used   = usage-last_used.
       assessment-usage_state = usage_state_of( object_type = object_level->object_type
                                                executions  = usage-executions ).
-      assessment-proposal    = proposal_for( level       = object_level->level
-                                             usage_state = assessment-usage_state ).
+      DATA(behavior_pool) = xsdbool( line_exists( behavior_pools[ object_type = object_level->object_type
+                                                                  object_name = object_level->object_name ] ) ).
+      assessment-proposal    = proposal_for( level         = object_level->level
+                                             usage_state   = assessment-usage_state
+                                             behavior_pool = behavior_pool ).
       INSERT assessment INTO TABLE result.
     ENDLOOP.
   ENDMETHOD.
@@ -66,7 +70,9 @@ CLASS zcl_ccr_assessor IMPLEMENTATION.
 
   METHOD proposal_for.
     IF usage_state = zif_ccr_assessor=>usage_state-not_used.
-      result = zif_ccr_assessor=>proposal-retire.
+      result = COND #( WHEN behavior_pool = abap_true
+                       THEN zif_ccr_assessor=>proposal-retire_with_bdef
+                       ELSE zif_ccr_assessor=>proposal-retire ).
       RETURN.
     ENDIF.
 

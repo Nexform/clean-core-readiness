@@ -20,6 +20,14 @@ CLASS ltc_assessor DEFINITION FINAL FOR TESTING
     METHODS when_not_used_then_retire FOR TESTING.
     METHODS when_cds_view_then_no_retire FOR TESTING.
     METHODS when_used_then_usage_shown FOR TESTING.
+    METHODS when_pool_not_used_then_bdef FOR TESTING.
+    METHODS when_pool_used_then_level FOR TESTING.
+
+    "! Assesses one behavior pool and hands back its row.
+    METHODS behavior_pool_assessment
+      IMPORTING level         TYPE zif_ccr_level_rules=>clean_core_level
+                executions    TYPE zif_ccr_assessor=>execution_count
+      RETURNING VALUE(result) TYPE zif_ccr_assessor=>assessment.
 
 ENDCLASS.
 
@@ -137,6 +145,51 @@ CLASS ltc_assessor IMPLEMENTATION.
     cl_abap_unit_assert=>assert_equals( act = assessment-last_used
                                         exp = CONV d( '20261125' )
                                         msg = `The row shows when the object ran last` ).
+  ENDMETHOD.
+
+  METHOD behavior_pool_assessment.
+    DATA(object_levels) = VALUE zif_ccr_classifier=>object_levels( ( object_type = 'CLAS'
+                                                                     object_name = 'ZBP_ANY_BEHAVIOR'
+                                                                     level       = level ) ).
+    DATA(usages) = COND zif_ccr_assessor=>object_usages(
+      WHEN executions > 0
+      THEN VALUE #( ( object_type = 'CLAS'
+                      object_name = 'ZBP_ANY_BEHAVIOR'
+                      executions  = executions
+                      last_used   = '20261125' ) ) ).
+    DATA(behavior_pools) = VALUE zif_ccr_classifier=>object_keys( ( object_type = 'CLAS'
+                                                                    object_name = 'ZBP_ANY_BEHAVIOR' ) ).
+
+    DATA(assessments) = cut->assess( object_levels  = object_levels
+                                     usages         = usages
+                                     behavior_pools = behavior_pools ).
+
+    result = assessments[ object_type = 'CLAS'
+                          object_name = 'ZBP_ANY_BEHAVIOR' ].
+  ENDMETHOD.
+
+
+  METHOD when_pool_not_used_then_bdef.
+    " ACT
+    DATA(assessment) = behavior_pool_assessment( level      = zif_ccr_level_rules=>level-c
+                                                 executions = 0 ).
+
+    " ASSERT
+    cl_abap_unit_assert=>assert_equals( act = assessment-proposal
+                                        exp = zif_ccr_assessor=>proposal-retire_with_bdef
+                                        msg = `A behavior pool that did not run goes only with its BDEF` ).
+  ENDMETHOD.
+
+
+  METHOD when_pool_used_then_level.
+    " ACT
+    DATA(assessment) = behavior_pool_assessment( level      = zif_ccr_level_rules=>level-c
+                                                 executions = 3 ).
+
+    " ASSERT
+    cl_abap_unit_assert=>assert_equals( act = assessment-proposal
+                                        exp = zif_ccr_assessor=>proposal-remediate
+                                        msg = `A behavior pool that ran follows its level like any class` ).
   ENDMETHOD.
 
 ENDCLASS.
