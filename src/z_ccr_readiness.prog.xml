@@ -169,7 +169,7 @@
     <item>
      <ID>I</ID>
      <KEY>S01</KEY>
-     <ENTRY>Transaction ATC: Runs, Schedule Runs, create a run series (or use the button 'Open transaction ATC').</ENTRY>
+     <ENTRY>Transaction ATC: Runs, Schedule Runs, create a run series (or use the button &apos;Open transaction ATC&apos;).</ENTRY>
      <LENGTH>101</LENGTH>
     </item>
     <item>
@@ -187,7 +187,7 @@
     <item>
      <ID>I</ID>
      <KEY>S04</KEY>
-     <ENTRY>Clear 'Consider Baseline', so that findings accepted earlier are counted too.</ENTRY>
+     <ENTRY>Clear &apos;Consider Baseline&apos;, so that findings accepted earlier are counted too.</ENTRY>
      <LENGTH>77</LENGTH>
     </item>
     <item>
@@ -199,13 +199,13 @@
     <item>
      <ID>I</ID>
      <KEY>S06</KEY>
-     <ENTRY>Back in this report: F4 on 'ATC run' lists the complete runs of the variant. Choose the run series result.</ENTRY>
+     <ENTRY>Back in this report: F4 on &apos;ATC run&apos; lists the complete runs of the variant. Choose the run series result.</ENTRY>
      <LENGTH>106</LENGTH>
     </item>
     <item>
      <ID>I</ID>
      <KEY>S07</KEY>
-     <ENTRY>Enter the same packages as in the run series. F4 on 'Usage data set': prefer usage data from production.</ENTRY>
+     <ENTRY>Enter the same packages as in the run series. F4 on &apos;Usage data set&apos;: prefer usage data from production.</ENTRY>
      <LENGTH>104</LENGTH>
     </item>
     <item>
