@@ -3,9 +3,13 @@
 INTERFACE zif_ccr_classifier PUBLIC.
 
   "! A custom object, named by its type and name
+  "! Package of a repository object as the object directory has it
+  TYPES package_name TYPE c LENGTH 30.
+  "! A custom object; its package is there to show it, the object is known by type and name
   TYPES: BEGIN OF object_key,
            object_type TYPE zif_ccr_level_rules=>object_type,
            object_name TYPE zif_ccr_level_rules=>object_name,
+           package     TYPE package_name,
          END OF object_key.
   "! Custom objects, each once
   TYPES object_keys TYPE SORTED TABLE OF object_key WITH UNIQUE KEY object_type object_name.

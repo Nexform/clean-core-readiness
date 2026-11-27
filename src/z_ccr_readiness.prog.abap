@@ -155,12 +155,14 @@ CLASS lcl_alv DEFINITION FINAL CREATE PUBLIC.
                 summary     TYPE zif_ccr_assessor=>summary
                 run         TYPE zif_ccr_atc_reader=>run
                 data_set    TYPE zif_ccr_usage_reader=>data_set
-                atc_reader  TYPE REF TO zif_ccr_atc_reader.
+                atc_reader  TYPE REF TO zif_ccr_atc_reader
+                objects     TYPE zif_ccr_classifier=>object_keys.
 
   PRIVATE SECTION.
     "! A row of the list: the assessment with the color of its level
     TYPES BEGIN OF output_row.
     INCLUDE TYPE zif_ccr_assessor=>assessment.
+    TYPES package TYPE zif_ccr_classifier=>package_name.
     TYPES colors TYPE lvc_t_scol.
     TYPES END OF output_row.
     TYPES output_rows TYPE STANDARD TABLE OF output_row WITH EMPTY KEY.
@@ -205,6 +207,10 @@ CLASS lcl_alv DEFINITION FINAL CREATE PUBLIC.
     METHODS colors_of
       IMPORTING level         TYPE zif_ccr_level_rules=>clean_core_level
       RETURNING VALUE(result) TYPE lvc_t_scol.
+
+    "! Functions, look, layouts and column names of the list
+    METHODS prepare_list
+      IMPORTING alv TYPE REF TO cl_salv_table.
 
     "! Zebra pattern and the level colors, the same in list and popup
     METHODS set_look
@@ -267,6 +273,8 @@ CLASS lcl_application DEFINITION FINAL CREATE PUBLIC.
     DATA atc_reader TYPE REF TO zif_ccr_atc_reader.
     DATA usage_reader TYPE REF TO zif_ccr_usage_reader.
     DATA assessor TYPE REF TO zif_ccr_assessor.
+    "! The objects of the packages and object types on the screen, with their package
+    DATA objects TYPE zif_ccr_classifier=>object_keys.
 
     "! The chosen run, if it is a complete run of the check variant; initial otherwise.
     METHODS chosen_run
@@ -492,31 +500,17 @@ CLASS lcl_alv IMPLEMENTATION.
   METHOD display.
     rows = VALUE #( FOR assessment IN assessments
                     ( VALUE #( BASE CORRESPONDING output_row( assessment )
-                               colors = colors_of( assessment-level ) ) ) ).
+                               package = VALUE #( objects[ object_type = assessment-object_type
+                                                           object_name = assessment-object_name ]-package OPTIONAL )
+                               colors  = colors_of( assessment-level ) ) ) ).
+    " the worst level first: that is where the work is
+    SORT rows BY level DESCENDING object_type object_name.
     reader = atc_reader.
     level_rules = NEW zcl_ccr_level_rules( ).
     TRY.
         cl_salv_table=>factory( IMPORTING r_salv_table = DATA(alv)
                                 CHANGING  t_table      = rows ).
-        alv->get_functions( )->set_all( ).
-        alv->get_columns( )->set_optimize( ).
-        set_look( alv ).
-        " layouts (columns, sort, filter) can be saved per user and as default
-        alv->get_layout( )->set_key( VALUE #( report = sy-repid ) ).
-        alv->get_layout( )->set_save_restriction( if_salv_c_layout=>restrict_none ).
-        alv->get_layout( )->set_default( abap_true ).
-        " the assessment has own types without dictionary texts, so every column is named here
-        name_columns( columns = alv->get_columns( )
-                      texts   = VALUE #( ( name = 'OBJECT_TYPE' text = TEXT-c01 )
-                                         ( name = 'OBJECT_NAME' text = TEXT-c02 )
-                                         ( name = 'LEVEL'       text = TEXT-c03 )
-                                         ( name = 'FINDINGS_B'  text = TEXT-c04 )
-                                         ( name = 'FINDINGS_C'  text = TEXT-c05 )
-                                         ( name = 'FINDINGS_D'  text = TEXT-c06 )
-                                         ( name = 'USAGE_STATE' text = TEXT-c07 )
-                                         ( name = 'EXECUTIONS'  text = TEXT-c08 )
-                                         ( name = 'LAST_USED'   text = TEXT-c09 )
-                                         ( name = 'PROPOSAL'    text = TEXT-c10 ) ) ).
+        prepare_list( alv ).
         SET HANDLER on_double_click FOR alv->get_event( ).
         alv->set_top_of_list( list_header( run      = run
                                            data_set = data_set
@@ -524,6 +518,36 @@ CLASS lcl_alv IMPLEMENTATION.
         alv->display( ).
       CATCH cx_salv_msg INTO DATA(failure).
         MESSAGE failure TYPE 'S' DISPLAY LIKE 'E'.
+    ENDTRY.
+  ENDMETHOD.
+
+
+  METHOD prepare_list.
+    alv->get_functions( )->set_all( ).
+    alv->get_columns( )->set_optimize( ).
+    set_look( alv ).
+    " layouts (columns, sort, filter) can be saved per user and as default
+    alv->get_layout( )->set_key( VALUE #( report = sy-repid ) ).
+    alv->get_layout( )->set_save_restriction( if_salv_c_layout=>restrict_none ).
+    alv->get_layout( )->set_default( abap_true ).
+    " the assessment has own types without dictionary texts, so every column is named here
+    name_columns( columns = alv->get_columns( )
+                  texts   = VALUE #( ( name = 'OBJECT_TYPE' text = TEXT-c01 )
+                                     ( name = 'OBJECT_NAME' text = TEXT-c02 )
+                                     ( name = 'LEVEL'       text = TEXT-c03 )
+                                     ( name = 'FINDINGS_B'  text = TEXT-c04 )
+                                     ( name = 'FINDINGS_C'  text = TEXT-c05 )
+                                     ( name = 'FINDINGS_D'  text = TEXT-c06 )
+                                     ( name = 'USAGE_STATE' text = TEXT-c07 )
+                                     ( name = 'EXECUTIONS'  text = TEXT-c08 )
+                                     ( name = 'LAST_USED'   text = TEXT-c09 )
+                                     ( name = 'PROPOSAL'    text = TEXT-c10 )
+                                     ( name = 'PACKAGE'     text = TEXT-c23 ) ) ).
+    TRY.
+        alv->get_columns( )->set_column_position( columnname = 'PACKAGE'
+                                                  position   = 3 ).
+      CATCH cx_salv_not_found ##NO_HANDLER.
+        " the package stays at the end
     ENDTRY.
   ENDMETHOD.
 
@@ -757,7 +781,8 @@ CLASS lcl_application IMPLEMENTATION.
                              summary     = assessor->summarize( assessments )
                              run         = atc_run
                              data_set    = data_set
-                             atc_reader  = atc_reader ).
+                             atc_reader  = atc_reader
+                             objects     = objects ).
   ENDMETHOD.
 
 
@@ -783,8 +808,8 @@ CLASS lcl_application IMPLEMENTATION.
   METHOD assess.
     " the packages and object types on the screen are the scope; the classifier leaves out
     " findings of objects outside it, and without objects there is nothing to assess
-    DATA(objects) = atc_reader->objects( packages     = selection-packages
-                                         object_types = selection-object_types ).
+    objects = atc_reader->objects( packages     = selection-packages
+                                   object_types = selection-object_types ).
     IF objects IS INITIAL.
       RETURN.
     ENDIF.
