@@ -36,6 +36,17 @@ INTERFACE zif_ccr_assessor PUBLIC.
   "! One row per custom object
   TYPES assessments TYPE SORTED TABLE OF assessment WITH UNIQUE KEY object_type object_name.
 
+  "! Number of objects of one level, by usage state
+  TYPES: BEGIN OF summary_line,
+           level    TYPE zif_ccr_level_rules=>clean_core_level,
+           used     TYPE i,
+           unknown  TYPE i,
+           not_used TYPE i,
+           total    TYPE i,
+         END OF summary_line.
+  "! One line per level, A to D
+  TYPES summary TYPE STANDARD TABLE OF summary_line WITH EMPTY KEY.
+
   "! UNKNOWN is the state of an object whose usage cannot be measured: usage data exists for
   "! classes, function groups and programs only.
   CONSTANTS: BEGIN OF usage_state,
@@ -69,5 +80,14 @@ INTERFACE zif_ccr_assessor PUBLIC.
               usages         TYPE object_usages
               behavior_pools TYPE zif_ccr_classifier=>object_keys OPTIONAL
     RETURNING VALUE(result)  TYPE assessments.
+
+  "! Counts the assessed objects per level and usage state: how much custom code there is
+  "! on each level, and how much of it is in use.
+  "!
+  "! @parameter assessments | Assessed objects
+  "! @parameter result      | One line for each level A to D, also for a level without objects
+  METHODS summarize
+    IMPORTING assessments   TYPE assessments
+    RETURNING VALUE(result) TYPE summary.
 
 ENDINTERFACE.

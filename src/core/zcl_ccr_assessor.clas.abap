@@ -54,6 +54,30 @@ CLASS zcl_ccr_assessor IMPLEMENTATION.
   ENDMETHOD.
 
 
+  METHOD zif_ccr_assessor~summarize.
+    result = VALUE #( ( level = zif_ccr_level_rules=>level-a )
+                      ( level = zif_ccr_level_rules=>level-b )
+                      ( level = zif_ccr_level_rules=>level-c )
+                      ( level = zif_ccr_level_rules=>level-d ) ).
+
+    LOOP AT assessments REFERENCE INTO DATA(assessment).
+      IF NOT line_exists( result[ level = assessment->level ] ).
+        CONTINUE.
+      ENDIF.
+      DATA(line) = REF #( result[ level = assessment->level ] ).
+      CASE assessment->usage_state.
+        WHEN zif_ccr_assessor=>usage_state-used.
+          line->used += 1.
+        WHEN zif_ccr_assessor=>usage_state-not_used.
+          line->not_used += 1.
+        WHEN OTHERS.
+          line->unknown += 1.
+      ENDCASE.
+      line->total += 1.
+    ENDLOOP.
+  ENDMETHOD.
+
+
   METHOD usage_state_of.
     CASE object_type.
       WHEN measured_type-class
