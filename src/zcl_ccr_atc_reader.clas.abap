@@ -19,9 +19,10 @@ CLASS zcl_ccr_atc_reader DEFINITION
     TYPES package_links TYPE SORTED TABLE OF package_link WITH NON-UNIQUE KEY parent.
 
     CONSTANTS whole_object TYPE tadir-pgmid VALUE 'R3TR'.
-    "! Generation flag of an object the system generated (e.g. /1BCDWB/* classes in $TMP):
-    "! not custom code, so not assessed
-    CONSTANTS generated TYPE tadir-genflag VALUE 'X'.
+    "! Generation flag of an object that was not generated (domain GENFLAG). X (generated,
+    "! preserved in the upgrade) and T (generated, can be deleted in the upgrade) are not
+    "! custom code, e.g. the /1BCDWB/* and CLR_* classes in $TMP, so they are not assessed
+    CONSTANTS not_generated TYPE tadir-genflag VALUE space.
     CONSTANTS class_type TYPE zif_ccr_level_rules=>object_type VALUE 'CLAS'.
     "! Active version of a class in SEOCLASSDF
     CONSTANTS active_version TYPE seoclassdf-version VALUE '1'.
@@ -111,7 +112,7 @@ CLASS zcl_ccr_atc_reader IMPLEMENTATION.
         AND object   IN @object_types
         AND devclass IN @package_range
         AND delflag   = @abap_false
-        AND genflag  <> @generated
+        AND genflag   = @not_generated
       ORDER BY object, obj_name
       INTO TABLE @result.
   ENDMETHOD.
