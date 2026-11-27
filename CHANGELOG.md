@@ -50,6 +50,11 @@ All notable changes to this project are listed here. The format follows
 
 ### Fixed
 
+- The packages and object types on the selection screen are the scope of the assessment. With
+  a package narrower than the ATC run, objects with findings from other packages were listed
+  too, while the objects without findings of those packages were not, so levels C and D looked
+  more frequent than they are. `ZCL_CCR_CLASSIFIER` now leaves out findings of objects outside
+  the list it is given.
 - `ZCL_CCR_CLASSIFIER` raised `CX_SY_DYN_CALL_ILLEGAL_TYPE` in a system: it passed a row of a
   sorted table to a CHANGING parameter. The row is now handed over as a reference. The
   off-stack tests had not shown it, because the transpiler does not protect table keys.

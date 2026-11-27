@@ -3,7 +3,7 @@
 *#      |\\/\\//\|        -----------------------------------      #*
 *#      |        |       /      Report: Z_CCR_READINESS      \     #*
 *#      |  (*) (*)      /                                     \    #*
-*#      |       __)    /        Version: 1.2 ()                \   #*
+*#      |       __)    /        Version: 1.3 ()                \   #*
 *#     (C    _____\   /         Magic. Do not touch.            \  #*
 *#       \  (__(   --{-------------------------------------------} #*
 *#       |    /       \         Created By : George Drakos      /  #*
@@ -34,6 +34,12 @@
 *& Description    : Pushbuttons for the steps to run ATC and a jump to *
 *&                  transaction ATC; required fields checked in the    *
 *&                  report, so the buttons work on an empty screen     *
+*& Author         : George Drakos                                      *
+*& Date           : 27/11/2026                                         *
+*& Change Request :                                                    *
+*&--------------------------------------------------------------------&*
+*& Description    : Packages and object types are the scope: findings *
+*&                  of objects outside them are left out               *
 *& Author         : George Drakos                                      *
 *& Date           : 27/11/2026                                         *
 *& Change Request :                                                    *
@@ -539,11 +545,14 @@ CLASS lcl_application IMPLEMENTATION.
 
 
   METHOD assess.
-    DATA(findings) = atc_reader->findings( result_id ).
-    " findings of excluded object types do not count, as the objects themselves do not
-    DELETE findings WHERE object_type NOT IN selection-object_types.
+    " the packages and object types on the screen are the scope; the classifier leaves out
+    " findings of objects outside it, and without objects there is nothing to assess
     DATA(objects) = atc_reader->objects( packages     = selection-packages
                                          object_types = selection-object_types ).
+    IF objects IS INITIAL.
+      RETURN.
+    ENDIF.
+    DATA(findings) = atc_reader->findings( result_id ).
 
     DATA(classifier) = CAST zif_ccr_classifier( NEW zcl_ccr_classifier( NEW zcl_ccr_level_rules( ) ) ).
     DATA(object_levels) = classifier->classify( findings = findings

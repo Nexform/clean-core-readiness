@@ -77,7 +77,7 @@ How to run ATC with the clean core variant and how to read the result by hand: [
 ## Limits of version 0.1
 
 - Only the check "Usage of APIs" decides the level. The other three clean core checks (allowed enhancement technologies, customer modifications, critical statements) are not counted yet: their check classes could not be confirmed on the test system.
-- An ATC result does not list the objects it checked. The report takes the objects of the packages you enter, so enter the packages of the ATC run.
+- An ATC result does not list the objects it checked. The report takes the objects of the packages and object types you enter; they are the scope, and findings of objects outside them are left out. Enter the packages of the ATC run, or a part of them to assess that part.
 - *Retire* is proposed per object. Some objects cannot be retired alone, for example the behavior pool class of a RAP business object, which belongs to its behavior definition. Check such candidates with their parent object.
 - Local usage data of a development system says little about production. Use usage data imported from production, covering a full business year.
 - Exempted ATC findings: not yet confirmed whether they are left out.
