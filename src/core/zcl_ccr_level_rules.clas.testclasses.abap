@@ -12,6 +12,12 @@ CLASS ltc_level_rules DEFINITION FINAL FOR TESTING
                 kind          TYPE zif_ccr_level_rules=>finding_kind_code
       RETURNING VALUE(result) TYPE zif_ccr_level_rules=>finding.
 
+    METHODS finding_of
+      IMPORTING check         TYPE zif_ccr_level_rules=>check_name
+                code          TYPE zif_ccr_level_rules=>message_code
+                kind          TYPE zif_ccr_level_rules=>finding_kind_code
+      RETURNING VALUE(result) TYPE zif_ccr_level_rules=>finding.
+
     METHODS when_classic_api_then_level_b FOR TESTING.
     METHODS when_internal_api_then_level_c FOR TESTING.
     METHODS when_no_api_then_level_d FOR TESTING.
@@ -19,6 +25,10 @@ CLASS ltc_level_rules DEFINITION FINAL FOR TESTING
     METHODS when_technical_code_then_none FOR TESTING.
     METHODS when_framework_code_then_none FOR TESTING.
     METHODS when_unknown_kind_then_none FOR TESTING.
+    METHODS when_native_sql_then_level_c FOR TESTING.
+    METHODS when_enhancement_then_level_d FOR TESTING.
+    METHODS when_modified_then_level_d FOR TESTING.
+    METHODS when_wdy_config_then_level_b FOR TESTING.
 
 ENDCLASS.
 
@@ -31,9 +41,16 @@ CLASS ltc_level_rules IMPLEMENTATION.
 
 
   METHOD api_usage_finding.
+    result = finding_of( check = 'CL_YCM_CC_CHECK_API_USAGE'
+                         code  = code
+                         kind  = kind ).
+  ENDMETHOD.
+
+
+  METHOD finding_of.
     result = VALUE #( object_type = 'CLAS'
                       object_name = 'ZCL_ANY_CUSTOM_CLASS'
-                      check_name  = 'CL_YCM_CC_CHECK_API_USAGE'
+                      check_name  = check
                       code        = code
                       kind        = kind ).
   ENDMETHOD.
@@ -144,6 +161,69 @@ CLASS ltc_level_rules IMPLEMENTATION.
     cl_abap_unit_assert=>assert_equals( act = level
                                         exp = zif_ccr_level_rules=>level-none
                                         msg = `A kind that ATC does not know must not give a level` ).
+  ENDMETHOD.
+
+  METHOD when_native_sql_then_level_c.
+    " ARRANGE
+    DATA(finding) = finding_of( check = 'CL_CI_TEST_CRITICAL_STATEMENTS'
+                                code  = '0006'
+                                kind  = 'W' ).
+
+    " ACT
+    DATA(level) = cut->level_of( finding ).
+
+    " ASSERT
+    cl_abap_unit_assert=>assert_equals( act = level
+                                        exp = zif_ccr_level_rules=>level-c
+                                        msg = `A warning of "Critical statements" (native SQL) gives level C` ).
+  ENDMETHOD.
+
+
+  METHOD when_enhancement_then_level_d.
+    " ARRANGE
+    DATA(finding) = finding_of( check = 'CL_CI_TEST_ADMISSIBLE_ENHANCM'
+                                code  = 'ENHINVALD'
+                                kind  = 'E' ).
+
+    " ACT
+    DATA(level) = cut->level_of( finding ).
+
+    " ASSERT
+    cl_abap_unit_assert=>assert_equals( act = level
+                                        exp = zif_ccr_level_rules=>level-d
+                                        msg = `An enhancement technology that is not allowed gives level D` ).
+  ENDMETHOD.
+
+
+  METHOD when_modified_then_level_d.
+    " ARRANGE
+    DATA(finding) = finding_of( check = 'CL_CI_TEST_CUST_MODIFICATIONS'
+                                code  = 'MOD'
+                                kind  = 'E' ).
+
+    " ACT
+    DATA(level) = cut->level_of( finding ).
+
+    " ASSERT
+    cl_abap_unit_assert=>assert_equals( act = level
+                                        exp = zif_ccr_level_rules=>level-d
+                                        msg = `A modified object gives level D` ).
+  ENDMETHOD.
+
+
+  METHOD when_wdy_config_then_level_b.
+    " ARRANGE
+    DATA(finding) = finding_of( check = 'CL_CI_TEST_ADMISSIBLE_ENHANCM'
+                                code  = 'WDYCONF'
+                                kind  = 'N' ).
+
+    " ACT
+    DATA(level) = cut->level_of( finding ).
+
+    " ASSERT
+    cl_abap_unit_assert=>assert_equals( act = level
+                                        exp = zif_ccr_level_rules=>level-b
+                                        msg = `A Web Dynpro configuration enhancement is level B, as its text says` ).
   ENDMETHOD.
 
 ENDCLASS.
