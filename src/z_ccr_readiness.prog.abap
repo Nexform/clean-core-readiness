@@ -145,8 +145,9 @@ ENDCLASS.
 *&----------------------------------------------------------------------*
 "! Shows the assessment as ALV list. Above it: the ATC run, the usage period, a note when
 "! the usage data is weak ground for retirement, and the number of objects per level and
-"! usage state. The ALV toolbar exports the list to a spreadsheet. A double click on a row
-"! shows the clean core findings of the object in a popup.
+"! usage state. The ALV toolbar exports the list to a spreadsheet. A click on the object name
+"! opens the object, a double click on a row shows its clean core findings in a popup, and a
+"! double click on a finding opens the source at its line - in a new window each time.
 CLASS lcl_alv DEFINITION FINAL CREATE PUBLIC.
 
   PUBLIC SECTION.
@@ -180,6 +181,10 @@ CLASS lcl_alv DEFINITION FINAL CREATE PUBLIC.
     TYPES END OF finding_row.
     TYPES finding_rows TYPE STANDARD TABLE OF finding_row WITH EMPTY KEY.
 
+    "! Workbench types to open a source: include of a class, include of a program
+    CONSTANTS class_include TYPE string VALUE `CINC`.
+    CONSTANTS program_include TYPE string VALUE `PROG`.
+    CONSTANTS class_type TYPE zif_ccr_level_rules=>object_type VALUE 'CLAS'.
     "! ALV colors of the levels: A green, B yellow, C orange, D red
     CONSTANTS: BEGIN OF level_color,
                  a TYPE lvc_col VALUE '5',
@@ -196,6 +201,8 @@ CLASS lcl_alv DEFINITION FINAL CREATE PUBLIC.
     DATA rows TYPE output_rows.
     "! The rows of the findings popup - they live as long as the popup
     DATA finding_list TYPE finding_rows.
+    "! The object whose findings the popup shows
+    DATA popup_object TYPE zif_ccr_assessor=>assessment.
     DATA reader TYPE REF TO zif_ccr_atc_reader.
     DATA level_rules TYPE REF TO zif_ccr_level_rules.
 
@@ -219,6 +226,20 @@ CLASS lcl_alv DEFINITION FINAL CREATE PUBLIC.
     METHODS on_double_click
       FOR EVENT double_click OF cl_salv_events_table
       IMPORTING row.
+
+    METHODS on_object_click
+      FOR EVENT link_click OF cl_salv_events_table
+      IMPORTING row.
+
+    METHODS on_finding_double_click
+      FOR EVENT double_click OF cl_salv_events_table
+      IMPORTING row.
+
+    "! Opens an object in the ABAP Workbench in a new window, at a line if one is given
+    METHODS open
+      IMPORTING object_type TYPE string
+                object_name TYPE string
+                line        TYPE i OPTIONAL.
 
     "! The clean core findings of one object, with their level, worst first
     METHODS clean_core_findings
@@ -511,7 +532,7 @@ CLASS lcl_alv IMPLEMENTATION.
         cl_salv_table=>factory( IMPORTING r_salv_table = DATA(alv)
                                 CHANGING  t_table      = rows ).
         prepare_list( alv ).
-        SET HANDLER on_double_click FOR alv->get_event( ).
+        SET HANDLER on_double_click on_object_click FOR alv->get_event( ).
         alv->set_top_of_list( list_header( run      = run
                                            data_set = data_set
                                            summary  = summary ) ).
@@ -546,8 +567,10 @@ CLASS lcl_alv IMPLEMENTATION.
     TRY.
         alv->get_columns( )->set_column_position( columnname = 'PACKAGE'
                                                   position   = 3 ).
+        CAST cl_salv_column_table( alv->get_columns( )->get_column( 'OBJECT_NAME' )
+          )->set_cell_type( if_salv_c_cell_type=>hotspot ).
       CATCH cx_salv_not_found ##NO_HANDLER.
-        " the package stays at the end
+        " the list works without, the object only does not open on a click
     ENDTRY.
   ENDMETHOD.
 
@@ -600,6 +623,51 @@ CLASS lcl_alv IMPLEMENTATION.
   ENDMETHOD.
 
 
+  METHOD on_object_click.
+    IF NOT line_exists( rows[ row ] ).
+      RETURN.
+    ENDIF.
+    open( object_type = CONV #( rows[ row ]-object_type )
+          object_name = CONV #( rows[ row ]-object_name ) ).
+  ENDMETHOD.
+
+
+  METHOD on_finding_double_click.
+    IF NOT line_exists( finding_list[ row ] ).
+      RETURN.
+    ENDIF.
+    DATA(finding) = finding_list[ row ].
+    IF finding-sub_object IS INITIAL.
+      " a finding without source position, e.g. of a CDS view: open the object itself
+      open( object_type = CONV #( popup_object-object_type )
+            object_name = CONV #( popup_object-object_name ) ).
+      RETURN.
+    ENDIF.
+    " an include of a class opens with type CINC, the workbench finds the class to it
+    open( object_type = COND #( WHEN popup_object-object_type = class_type THEN class_include ELSE program_include )
+          object_name = finding-sub_object
+          line        = finding-line ).
+  ENDMETHOD.
+
+
+  METHOD open.
+    CALL FUNCTION 'RS_TOOL_ACCESS'
+      EXPORTING
+        operation           = 'SHOW'
+        object_name         = object_name
+        object_type         = object_type
+        position            = COND string( WHEN line > 0 THEN |{ line }| )
+        in_new_window       = abap_true
+      EXCEPTIONS
+        not_executed        = 1
+        invalid_object_type = 2
+        OTHERS              = 3.
+    IF sy-subrc <> 0.
+      MESSAGE TEXT-e09 TYPE 'S' DISPLAY LIKE 'E'.
+    ENDIF.
+  ENDMETHOD.
+
+
   METHOD clean_core_findings.
     DATA(details) = reader->finding_details( object_type = assessment-object_type
                                              object_name = assessment-object_name ).
@@ -628,6 +696,7 @@ CLASS lcl_alv IMPLEMENTATION.
 
 
   METHOD show_findings.
+    popup_object = assessment.
     finding_list = clean_core_findings( assessment ).
     IF finding_list IS INITIAL.
       MESSAGE TEXT-e08 TYPE 'S'.
@@ -659,6 +728,7 @@ CLASS lcl_alv IMPLEMENTATION.
         " the check class is in the title already, and the kind in words
         popup->get_columns( )->get_column( 'CHECK_NAME' )->set_visible( abap_false ).
         popup->get_columns( )->get_column( 'KIND' )->set_visible( abap_false ).
+        SET HANDLER on_finding_double_click FOR popup->get_event( ).
         popup->display( ).
       CATCH cx_salv_msg cx_salv_not_found INTO DATA(failure).
         MESSAGE failure TYPE 'S' DISPLAY LIKE 'E'.
