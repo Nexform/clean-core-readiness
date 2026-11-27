@@ -143,14 +143,15 @@ ENDCLASS.
 *&----------------------------------------------------------------------*
 *&CLASS lcl_alv DEFINITION
 *&----------------------------------------------------------------------*
-"! Shows the assessment as ALV list, with the ATC run and the usage period above it, and a
-"! note when the usage data is weak ground for retirement. The ALV toolbar exports the list
-"! to a spreadsheet.
+"! Shows the assessment as ALV list. Above it: the ATC run, the usage period, a note when
+"! the usage data is weak ground for retirement, and the number of objects per level and
+"! usage state. The ALV toolbar exports the list to a spreadsheet.
 CLASS lcl_alv DEFINITION FINAL CREATE PUBLIC.
 
   PUBLIC SECTION.
     METHODS display
       IMPORTING assessments TYPE zif_ccr_assessor=>assessments
+                summary     TYPE zif_ccr_assessor=>summary
                 run         TYPE zif_ccr_atc_reader=>run
                 data_set    TYPE zif_ccr_usage_reader=>data_set.
 
@@ -176,7 +177,19 @@ CLASS lcl_alv DEFINITION FINAL CREATE PUBLIC.
     METHODS list_header
       IMPORTING run           TYPE zif_ccr_atc_reader=>run
                 data_set      TYPE zif_ccr_usage_reader=>data_set
+                summary       TYPE zif_ccr_assessor=>summary
       RETURNING VALUE(result) TYPE REF TO cl_salv_form_layout_grid.
+
+    "! Writes the summary as a small table: one line per level and a total line
+    METHODS summary_table
+      IMPORTING summary TYPE zif_ccr_assessor=>summary
+                grid    TYPE REF TO cl_salv_form_layout_grid.
+
+    "! Writes one row of the summary table
+    METHODS table_row
+      IMPORTING grid  TYPE REF TO cl_salv_form_layout_grid
+                row   TYPE i
+                cells TYPE string_table.
 
 ENDCLASS.
 
@@ -204,6 +217,7 @@ CLASS lcl_application DEFINITION FINAL CREATE PUBLIC.
     DATA selection TYPE screen_selection.
     DATA atc_reader TYPE REF TO zif_ccr_atc_reader.
     DATA usage_reader TYPE REF TO zif_ccr_usage_reader.
+    DATA assessor TYPE REF TO zif_ccr_assessor.
 
     "! The chosen run, if it is a complete run of the check variant; initial otherwise.
     METHODS chosen_run
@@ -435,7 +449,8 @@ CLASS lcl_alv IMPLEMENTATION.
         alv->get_columns( )->set_optimize( ).
         name_columns( alv->get_columns( ) ).
         alv->set_top_of_list( list_header( run      = run
-                                           data_set = data_set ) ).
+                                           data_set = data_set
+                                           summary  = summary ) ).
         alv->display( ).
       CATCH cx_salv_msg INTO DATA(failure).
         MESSAGE failure TYPE 'S' DISPLAY LIKE 'E'.
@@ -502,6 +517,56 @@ CLASS lcl_alv IMPLEMENTATION.
                            column = 2
                            text   = note->* ).
     ENDLOOP.
+
+    " the summary sits in a grid of its own, so its columns do not take the width of the texts above
+    DATA(summary_row) = 3 + lines( notes ).
+    result->create_label( row    = summary_row
+                          column = 1
+                          text   = TEXT-h06 ).
+    summary_table( summary = summary
+                   grid    = result->create_grid( row    = summary_row
+                                                  column = 2 ) ).
+  ENDMETHOD.
+
+
+  METHOD summary_table.
+    table_row( grid  = grid
+               row   = 1
+               cells = VALUE #( ( CONV #( TEXT-h07 ) ) ( CONV #( TEXT-h08 ) ) ( CONV #( TEXT-h09 ) )
+                                ( CONV #( TEXT-h10 ) ) ( CONV #( TEXT-h11 ) ) ) ).
+
+    DATA(total) = VALUE zif_ccr_assessor=>summary_line( ).
+    LOOP AT summary REFERENCE INTO DATA(line).
+      table_row( grid  = grid
+                 row   = 1 + sy-tabix
+                 cells = VALUE #( ( CONV #( line->level ) ) ( |{ line->used }| ) ( |{ line->unknown }| )
+                                  ( |{ line->not_used }| ) ( |{ line->total }| ) ) ).
+      total-used     += line->used.
+      total-unknown  += line->unknown.
+      total-not_used += line->not_used.
+      total-total    += line->total.
+    ENDLOOP.
+
+    table_row( grid  = grid
+               row   = 2 + lines( summary )
+               cells = VALUE #( ( CONV #( TEXT-h12 ) ) ( |{ total-used }| ) ( |{ total-unknown }| )
+                                ( |{ total-not_used }| ) ( |{ total-total }| ) ) ).
+  ENDMETHOD.
+
+
+  METHOD table_row.
+    " the first cell and the first row are titles, the others numbers
+    LOOP AT cells REFERENCE INTO DATA(cell).
+      IF row = 1 OR sy-tabix = 1.
+        grid->create_label( row    = row
+                            column = sy-tabix
+                            text   = cell->* ).
+      ELSE.
+        grid->create_text( row    = row
+                           column = sy-tabix
+                           text   = cell->* ).
+      ENDIF.
+    ENDLOOP.
   ENDMETHOD.
 
 ENDCLASS.
@@ -515,6 +580,7 @@ CLASS lcl_application IMPLEMENTATION.
     me->selection = selection.
     atc_reader    = NEW zcl_ccr_atc_reader( ).
     usage_reader  = NEW zcl_ccr_usage_reader( ).
+    assessor      = NEW zcl_ccr_assessor( ).
   ENDMETHOD.
 
 
@@ -544,6 +610,7 @@ CLASS lcl_application IMPLEMENTATION.
     ENDIF.
 
     NEW lcl_alv( )->display( assessments = assessments
+                             summary     = assessor->summarize( assessments )
                              run         = atc_run
                              data_set    = data_set ).
   ENDMETHOD.
@@ -583,7 +650,6 @@ CLASS lcl_application IMPLEMENTATION.
                                                 objects  = objects ).
 
     " usage is read for every classified object: one missing here would count as not used
-    DATA(assessor) = CAST zif_ccr_assessor( NEW zcl_ccr_assessor( ) ).
     result = assessor->assess( object_levels  = object_levels
                                usages         = usage_reader->usages( usage_id = usage_id
                                                                       objects  = CORRESPONDING #( object_levels ) )
