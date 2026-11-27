@@ -205,16 +205,17 @@ CLASS lcl_alv DEFINITION FINAL CREATE PUBLIC.
                 summary       TYPE zif_ccr_assessor=>summary
       RETURNING VALUE(result) TYPE REF TO cl_salv_form_layout_grid.
 
-    "! Writes the summary as a small table: one line per level and a total line
-    METHODS summary_table
-      IMPORTING summary TYPE zif_ccr_assessor=>summary
-                grid    TYPE REF TO cl_salv_form_layout_grid.
+    "! Writes the summary below the other lines of the header: one line per level and a total
+    "! line. A grid nested in the header shows only one cell per row, so each line is one text.
+    METHODS summary_lines
+      IMPORTING summary   TYPE zif_ccr_assessor=>summary
+                grid      TYPE REF TO cl_salv_form_layout_grid
+                first_row TYPE i.
 
-    "! Writes one row of the summary table
-    METHODS table_row
-      IMPORTING grid  TYPE REF TO cl_salv_form_layout_grid
-                row   TYPE i
-                cells TYPE string_table.
+    "! One line of the summary: "482 objects: 300 used, 100 usage unknown, 82 not used"
+    METHODS summary_text
+      IMPORTING line          TYPE zif_ccr_assessor=>summary_line
+      RETURNING VALUE(result) TYPE string.
 
 ENDCLASS.
 
@@ -611,55 +612,41 @@ CLASS lcl_alv IMPLEMENTATION.
                            text   = note->* ).
     ENDLOOP.
 
-    " the summary sits in a grid of its own, so its columns do not take the width of the texts above
-    DATA(summary_row) = 3 + lines( notes ).
-    result->create_label( row    = summary_row
-                          column = 1
-                          text   = TEXT-h06 ).
-    summary_table( summary = summary
-                   grid    = result->create_grid( row    = summary_row
-                                                  column = 2 ) ).
+    summary_lines( summary   = summary
+                   grid      = result
+                   first_row = 3 + lines( notes ) ).
   ENDMETHOD.
 
 
-  METHOD summary_table.
-    table_row( grid  = grid
-               row   = 1
-               cells = VALUE #( ( CONV #( TEXT-h07 ) ) ( CONV #( TEXT-h08 ) ) ( CONV #( TEXT-h09 ) )
-                                ( CONV #( TEXT-h10 ) ) ( CONV #( TEXT-h11 ) ) ) ).
-
+  METHOD summary_lines.
     DATA(total) = VALUE zif_ccr_assessor=>summary_line( ).
     LOOP AT summary REFERENCE INTO DATA(line).
-      table_row( grid  = grid
-                 row   = 1 + sy-tabix
-                 cells = VALUE #( ( CONV #( line->level ) ) ( |{ line->used }| ) ( |{ line->unknown }| )
-                                  ( |{ line->not_used }| ) ( |{ line->total }| ) ) ).
+      DATA(row) = first_row + sy-tabix - 1.
+      grid->create_label( row    = row
+                          column = 1
+                          text   = |{ TEXT-h07 } { line->level }| ).
+      grid->create_text( row    = row
+                         column = 2
+                         text   = summary_text( line->* ) ).
       total-used     += line->used.
       total-unknown  += line->unknown.
       total-not_used += line->not_used.
       total-total    += line->total.
     ENDLOOP.
 
-    table_row( grid  = grid
-               row   = 2 + lines( summary )
-               cells = VALUE #( ( CONV #( TEXT-h12 ) ) ( |{ total-used }| ) ( |{ total-unknown }| )
-                                ( |{ total-not_used }| ) ( |{ total-total }| ) ) ).
+    DATA(total_row) = first_row + lines( summary ).
+    grid->create_label( row    = total_row
+                        column = 1
+                        text   = TEXT-h12 ).
+    grid->create_text( row    = total_row
+                       column = 2
+                       text   = summary_text( total ) ).
   ENDMETHOD.
 
 
-  METHOD table_row.
-    " the first cell and the first row are titles, the others numbers
-    LOOP AT cells REFERENCE INTO DATA(cell).
-      IF row = 1 OR sy-tabix = 1.
-        grid->create_label( row    = row
-                            column = sy-tabix
-                            text   = cell->* ).
-      ELSE.
-        grid->create_text( row    = row
-                           column = sy-tabix
-                           text   = cell->* ).
-      ENDIF.
-    ENDLOOP.
+  METHOD summary_text.
+    result = |{ line-total } { TEXT-h11 }: { line-used } { TEXT-h08 }, |
+          && |{ line-unknown } { TEXT-h09 }, { line-not_used } { TEXT-h10 }|.
   ENDMETHOD.
 
 ENDCLASS.

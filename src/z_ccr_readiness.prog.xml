@@ -234,12 +234,6 @@
     </item>
     <item>
      <ID>I</ID>
-     <KEY>H06</KEY>
-     <ENTRY>Summary</ENTRY>
-     <LENGTH>7</LENGTH>
-    </item>
-    <item>
-     <ID>I</ID>
      <KEY>H07</KEY>
      <ENTRY>Level</ENTRY>
      <LENGTH>5</LENGTH>
@@ -247,26 +241,26 @@
     <item>
      <ID>I</ID>
      <KEY>H08</KEY>
-     <ENTRY>Used</ENTRY>
+     <ENTRY>used</ENTRY>
      <LENGTH>4</LENGTH>
     </item>
     <item>
      <ID>I</ID>
      <KEY>H09</KEY>
-     <ENTRY>Usage unknown</ENTRY>
+     <ENTRY>usage unknown</ENTRY>
      <LENGTH>13</LENGTH>
     </item>
     <item>
      <ID>I</ID>
      <KEY>H10</KEY>
-     <ENTRY>Not used</ENTRY>
+     <ENTRY>not used</ENTRY>
      <LENGTH>8</LENGTH>
     </item>
     <item>
      <ID>I</ID>
      <KEY>H11</KEY>
-     <ENTRY>Total</ENTRY>
-     <LENGTH>5</LENGTH>
+     <ENTRY>objects</ENTRY>
+     <LENGTH>7</LENGTH>
     </item>
     <item>
      <ID>I</ID>
