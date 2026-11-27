@@ -8,7 +8,7 @@ INTERFACE zif_ccr_assessor PUBLIC.
   "! State of the usage of an object: one of the values of USAGE_STATE
   TYPES usage_state_code TYPE c LENGTH 8.
   "! What to do with an object: one of the values of PROPOSAL
-  TYPES proposal_code TYPE c LENGTH 15.
+  TYPES proposal_code TYPE c LENGTH 16.
 
   "! Usage of one object, summed over its procedures
   TYPES: BEGIN OF object_usage,
@@ -45,23 +45,29 @@ INTERFACE zif_ccr_assessor PUBLIC.
              END OF usage_state.
 
   "! RETIRE marks a candidate: the owner of the object decides, nothing is deleted.
+  "! RETIRE WITH BDEF is a behavior pool that did not run: it cannot go without its behavior
+  "! definition, so the two are retired together or not at all.
   CONSTANTS: BEGIN OF proposal,
-               keep            TYPE proposal_code VALUE 'KEEP',
-               remediate       TYPE proposal_code VALUE 'REMEDIATE',
-               remediate_first TYPE proposal_code VALUE 'REMEDIATE FIRST',
-               retire          TYPE proposal_code VALUE 'RETIRE',
+               keep             TYPE proposal_code VALUE 'KEEP',
+               remediate        TYPE proposal_code VALUE 'REMEDIATE',
+               remediate_first  TYPE proposal_code VALUE 'REMEDIATE FIRST',
+               retire           TYPE proposal_code VALUE 'RETIRE',
+               retire_with_bdef TYPE proposal_code VALUE 'RETIRE WITH BDEF',
              END OF proposal.
 
   "! Proposes for every object: RETIRE when it can be measured and did not run; otherwise
   "! KEEP at level A or B, REMEDIATE at level C, REMEDIATE FIRST at level D. An object whose
-  "! usage is unknown is never proposed for retirement.
+  "! usage is unknown is never proposed for retirement. A behavior pool that did not run is
+  "! proposed RETIRE WITH BDEF instead of RETIRE.
   "!
-  "! @parameter object_levels | Custom objects with their clean core level
-  "! @parameter usages        | Usage of the objects that ran - other objects have no row
-  "! @parameter result        | The objects of OBJECT_LEVELS with usage and proposal
+  "! @parameter object_levels  | Custom objects with their clean core level
+  "! @parameter usages         | Usage of the objects that ran - other objects have no row
+  "! @parameter behavior_pools | Classes of OBJECT_LEVELS that are behavior pools
+  "! @parameter result         | The objects of OBJECT_LEVELS with usage and proposal
   METHODS assess
-    IMPORTING object_levels TYPE zif_ccr_classifier=>object_levels
-              usages        TYPE object_usages
-    RETURNING VALUE(result) TYPE assessments.
+    IMPORTING object_levels  TYPE zif_ccr_classifier=>object_levels
+              usages         TYPE object_usages
+              behavior_pools TYPE zif_ccr_classifier=>object_keys OPTIONAL
+    RETURNING VALUE(result)  TYPE assessments.
 
 ENDINTERFACE.

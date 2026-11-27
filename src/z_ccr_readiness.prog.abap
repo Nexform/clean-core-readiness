@@ -560,9 +560,10 @@ CLASS lcl_application IMPLEMENTATION.
 
     " usage is read for every classified object: one missing here would count as not used
     DATA(assessor) = CAST zif_ccr_assessor( NEW zcl_ccr_assessor( ) ).
-    result = assessor->assess( object_levels = object_levels
-                               usages        = usage_reader->usages( usage_id = usage_id
-                                                                     objects  = CORRESPONDING #( object_levels ) ) ).
+    result = assessor->assess( object_levels  = object_levels
+                               usages         = usage_reader->usages( usage_id = usage_id
+                                                                      objects  = CORRESPONDING #( object_levels ) )
+                               behavior_pools = atc_reader->behavior_pools( objects ) ).
   ENDMETHOD.
 
 ENDCLASS.
