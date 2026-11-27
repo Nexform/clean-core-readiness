@@ -58,6 +58,8 @@ Then activate the objects. The package `Z_CCR_CORE` holds the logic and its ABAP
 
 Run the report `Z_CCR_READINESS`.
 
+No ATC run yet? The two buttons at the top of the selection screen help: **How to run ATC** lists the steps to create a run series with the clean core variant, and **Open transaction ATC** goes there. The report itself starts no ATC run.
+
 | Field | What to enter |
 |---|---|
 | Check variant | The variant of the ATC run, default `ABAP_CLEAN_CORE_DEVELOPMENT` |
@@ -65,6 +67,8 @@ Run the report `Z_CCR_READINESS`.
 | Packages of the run | The packages the ATC run checked; their subpackages are included |
 | Object types | Default CLAS, INTF, PROG, FUGR, DDLS, BDEF, ENHO. Other types carry no code and would all be level A |
 | Usage data set | F4 lists the usage data sets of `SUSG` with system and period |
+
+ATC run, packages and usage data set are required; the report says so when one is missing.
 
 The ALV list shows one row per object: type, name, level, findings per level (B, C, D), usage state, executions, last use and proposal. Above the list: the ATC run and the period of the usage data. Export the list with the ALV toolbar (Export, Spreadsheet).
 

@@ -24,6 +24,12 @@
     </item>
     <item>
      <ID>I</ID>
+     <KEY>B03</KEY>
+     <ENTRY>No ATC run yet?</ENTRY>
+     <LENGTH>15</LENGTH>
+    </item>
+    <item>
+     <ID>I</ID>
      <KEY>C01</KEY>
      <ENTRY>Type</ENTRY>
      <LENGTH>4</LENGTH>
@@ -84,6 +90,18 @@
     </item>
     <item>
      <ID>I</ID>
+     <KEY>C11</KEY>
+     <ENTRY>Step</ENTRY>
+     <LENGTH>4</LENGTH>
+    </item>
+    <item>
+     <ID>I</ID>
+     <KEY>C12</KEY>
+     <ENTRY>What to do</ENTRY>
+     <LENGTH>10</LENGTH>
+    </item>
+    <item>
+     <ID>I</ID>
      <KEY>E01</KEY>
      <ENTRY>The ATC run is not a complete run of this check variant</ENTRY>
      <LENGTH>55</LENGTH>
@@ -114,6 +132,18 @@
     </item>
     <item>
      <ID>I</ID>
+     <KEY>E06</KEY>
+     <ENTRY>Enter the ATC run, the packages of the run and the usage data set</ENTRY>
+     <LENGTH>65</LENGTH>
+    </item>
+    <item>
+     <ID>I</ID>
+     <KEY>E07</KEY>
+     <ENTRY>No authorization for transaction ATC</ENTRY>
+     <LENGTH>36</LENGTH>
+    </item>
+    <item>
+     <ID>I</ID>
      <KEY>H01</KEY>
      <ENTRY>ATC run</ENTRY>
      <LENGTH>7</LENGTH>
@@ -123,6 +153,72 @@
      <KEY>H02</KEY>
      <ENTRY>Usage data</ENTRY>
      <LENGTH>10</LENGTH>
+    </item>
+    <item>
+     <ID>I</ID>
+     <KEY>P01</KEY>
+     <ENTRY>How to run ATC</ENTRY>
+     <LENGTH>14</LENGTH>
+    </item>
+    <item>
+     <ID>I</ID>
+     <KEY>P02</KEY>
+     <ENTRY>Open transaction ATC</ENTRY>
+     <LENGTH>20</LENGTH>
+    </item>
+    <item>
+     <ID>I</ID>
+     <KEY>S01</KEY>
+     <ENTRY>Transaction ATC: Runs, Schedule Runs, create a run series (or use the button 'Open transaction ATC').</ENTRY>
+     <LENGTH>101</LENGTH>
+    </item>
+    <item>
+     <ID>I</ID>
+     <KEY>S02</KEY>
+     <ENTRY>Check variant: ABAP_CLEAN_CORE_DEVELOPMENT or your copy of it. Enter the same variant in this report.</ENTRY>
+     <LENGTH>101</LENGTH>
+    </item>
+    <item>
+     <ID>I</ID>
+     <KEY>S03</KEY>
+     <ENTRY>Object set: the packages to assess. Use a pattern such as Z_SALES* so that the subpackages are included.</ENTRY>
+     <LENGTH>104</LENGTH>
+    </item>
+    <item>
+     <ID>I</ID>
+     <KEY>S04</KEY>
+     <ENTRY>Clear 'Consider Baseline', so that findings accepted earlier are counted too.</ENTRY>
+     <LENGTH>77</LENGTH>
+    </item>
+    <item>
+     <ID>I</ID>
+     <KEY>S05</KEY>
+     <ENTRY>Schedule the run series and follow it under Monitor and Control Runs until it is complete.</ENTRY>
+     <LENGTH>90</LENGTH>
+    </item>
+    <item>
+     <ID>I</ID>
+     <KEY>S06</KEY>
+     <ENTRY>Back in this report: F4 on 'ATC run' lists the complete runs of the variant. Choose the run series result.</ENTRY>
+     <LENGTH>106</LENGTH>
+    </item>
+    <item>
+     <ID>I</ID>
+     <KEY>S07</KEY>
+     <ENTRY>Enter the same packages as in the run series. F4 on 'Usage data set': prefer usage data from production.</ENTRY>
+     <LENGTH>104</LENGTH>
+    </item>
+    <item>
+     <ID>I</ID>
+     <KEY>S08</KEY>
+     <ENTRY>Before the first run: the check must have the list of classic APIs (classicAPIDataSource), see docs/guide.md.</ENTRY>
+     <LENGTH>109</LENGTH>
+    </item>
+    <item>
+     <ID>I</ID>
+     <KEY>T01</KEY>
+     <ENTRY>How to run ATC for this report</ENTRY>
+     <LENGTH>30</LENGTH>
     </item>
     <item>
      <ID>R</ID>
