@@ -15,6 +15,20 @@ INTERFACE zif_ccr_atc_reader PUBLIC.
   TYPES run_list TYPE STANDARD TABLE OF run WITH EMPTY KEY.
   TYPES check_variant TYPE satc_ac_resulth-chk_profile_name.
   TYPES package_range TYPE RANGE OF devclass.
+  "! One finding of an object with what its remediation needs: where it is and which SAP
+  "! object it uses, with the successor of that object if SAP names one
+  TYPES: BEGIN OF finding_detail,
+           check_name      TYPE zif_ccr_level_rules=>check_name,
+           check_title     TYPE string,
+           code            TYPE zif_ccr_level_rules=>message_code,
+           kind            TYPE zif_ccr_level_rules=>finding_kind_code,
+           sub_object      TYPE string,
+           line            TYPE i,
+           ref_object_type TYPE string,
+           ref_object_name TYPE string,
+           successor       TYPE string,
+         END OF finding_detail.
+  TYPES finding_details TYPE STANDARD TABLE OF finding_detail WITH EMPTY KEY.
   TYPES object_type_range TYPE RANGE OF trobjtype.
 
   "! The complete runs of a check variant, to choose the run to assess.
@@ -43,6 +57,16 @@ INTERFACE zif_ccr_atc_reader PUBLIC.
     IMPORTING packages      TYPE package_range
               object_types  TYPE object_type_range OPTIONAL
     RETURNING VALUE(result) TYPE zif_ccr_classifier=>object_keys.
+
+  "! The findings of one object in the run that FINDINGS read last, with their details.
+  "!
+  "! @parameter object_type | Type of the object, e.g. CLAS
+  "! @parameter object_name | Name of the object
+  "! @parameter result      | Its findings of every check; empty when FINDINGS was not called
+  METHODS finding_details
+    IMPORTING object_type   TYPE zif_ccr_level_rules=>object_type
+              object_name   TYPE zif_ccr_level_rules=>object_name
+    RETURNING VALUE(result) TYPE finding_details.
 
   "! Returns the classes of a list that are behavior pools of a RAP behavior definition.
   "!

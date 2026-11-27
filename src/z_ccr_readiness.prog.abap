@@ -145,7 +145,8 @@ ENDCLASS.
 *&----------------------------------------------------------------------*
 "! Shows the assessment as ALV list. Above it: the ATC run, the usage period, a note when
 "! the usage data is weak ground for retirement, and the number of objects per level and
-"! usage state. The ALV toolbar exports the list to a spreadsheet.
+"! usage state. The ALV toolbar exports the list to a spreadsheet. A double click on a row
+"! shows the clean core findings of the object in a popup.
 CLASS lcl_alv DEFINITION FINAL CREATE PUBLIC.
 
   PUBLIC SECTION.
@@ -153,7 +154,8 @@ CLASS lcl_alv DEFINITION FINAL CREATE PUBLIC.
       IMPORTING assessments TYPE zif_ccr_assessor=>assessments
                 summary     TYPE zif_ccr_assessor=>summary
                 run         TYPE zif_ccr_atc_reader=>run
-                data_set    TYPE zif_ccr_usage_reader=>data_set.
+                data_set    TYPE zif_ccr_usage_reader=>data_set
+                atc_reader  TYPE REF TO zif_ccr_atc_reader.
 
   PRIVATE SECTION.
     TYPES output_rows TYPE STANDARD TABLE OF zif_ccr_assessor=>assessment WITH EMPTY KEY.
@@ -162,6 +164,12 @@ CLASS lcl_alv DEFINITION FINAL CREATE PUBLIC.
              text TYPE scrtext_m,
            END OF column_text.
     TYPES column_texts TYPE STANDARD TABLE OF column_text WITH EMPTY KEY.
+    "! A clean core finding of one object, as the popup shows it
+    TYPES BEGIN OF finding_row.
+    TYPES level TYPE zif_ccr_level_rules=>clean_core_level.
+    INCLUDE TYPE zif_ccr_atc_reader=>finding_detail.
+    TYPES END OF finding_row.
+    TYPES finding_rows TYPE STANDARD TABLE OF finding_row WITH EMPTY KEY.
 
     "! Usage data of less than a year can miss jobs that run once a year
     CONSTANTS days_of_a_year TYPE i VALUE 365.
@@ -170,9 +178,26 @@ CLASS lcl_alv DEFINITION FINAL CREATE PUBLIC.
 
     "! The rows the ALV shows - they live as long as the list
     DATA rows TYPE output_rows.
+    "! The rows of the findings popup - they live as long as the popup
+    DATA finding_list TYPE finding_rows.
+    DATA reader TYPE REF TO zif_ccr_atc_reader.
+    DATA level_rules TYPE REF TO zif_ccr_level_rules.
 
     METHODS name_columns
-      IMPORTING columns TYPE REF TO cl_salv_columns_table.
+      IMPORTING columns TYPE REF TO cl_salv_columns_table
+                texts   TYPE column_texts.
+
+    METHODS on_double_click
+      FOR EVENT double_click OF cl_salv_events_table
+      IMPORTING row.
+
+    "! The clean core findings of one object, with their level, worst first
+    METHODS clean_core_findings
+      IMPORTING assessment    TYPE zif_ccr_assessor=>assessment
+      RETURNING VALUE(result) TYPE finding_rows.
+
+    METHODS show_findings
+      IMPORTING assessment TYPE zif_ccr_assessor=>assessment.
 
     METHODS list_header
       IMPORTING run           TYPE zif_ccr_atc_reader=>run
@@ -442,12 +467,26 @@ CLASS lcl_alv IMPLEMENTATION.
 
   METHOD display.
     rows = assessments.
+    reader = atc_reader.
+    level_rules = NEW zcl_ccr_level_rules( ).
     TRY.
         cl_salv_table=>factory( IMPORTING r_salv_table = DATA(alv)
                                 CHANGING  t_table      = rows ).
         alv->get_functions( )->set_all( ).
         alv->get_columns( )->set_optimize( ).
-        name_columns( alv->get_columns( ) ).
+        " the assessment has own types without dictionary texts, so every column is named here
+        name_columns( columns = alv->get_columns( )
+                      texts   = VALUE #( ( name = 'OBJECT_TYPE' text = TEXT-c01 )
+                                         ( name = 'OBJECT_NAME' text = TEXT-c02 )
+                                         ( name = 'LEVEL'       text = TEXT-c03 )
+                                         ( name = 'FINDINGS_B'  text = TEXT-c04 )
+                                         ( name = 'FINDINGS_C'  text = TEXT-c05 )
+                                         ( name = 'FINDINGS_D'  text = TEXT-c06 )
+                                         ( name = 'USAGE_STATE' text = TEXT-c07 )
+                                         ( name = 'EXECUTIONS'  text = TEXT-c08 )
+                                         ( name = 'LAST_USED'   text = TEXT-c09 )
+                                         ( name = 'PROPOSAL'    text = TEXT-c10 ) ) ).
+        SET HANDLER on_double_click FOR alv->get_event( ).
         alv->set_top_of_list( list_header( run      = run
                                            data_set = data_set
                                            summary  = summary ) ).
@@ -459,17 +498,6 @@ CLASS lcl_alv IMPLEMENTATION.
 
 
   METHOD name_columns.
-    " the assessment has own types without dictionary texts, so every column is named here
-    DATA(texts) = VALUE column_texts( ( name = 'OBJECT_TYPE' text = TEXT-c01 )
-                                      ( name = 'OBJECT_NAME' text = TEXT-c02 )
-                                      ( name = 'LEVEL'       text = TEXT-c03 )
-                                      ( name = 'FINDINGS_B'  text = TEXT-c04 )
-                                      ( name = 'FINDINGS_C'  text = TEXT-c05 )
-                                      ( name = 'FINDINGS_D'  text = TEXT-c06 )
-                                      ( name = 'USAGE_STATE' text = TEXT-c07 )
-                                      ( name = 'EXECUTIONS'  text = TEXT-c08 )
-                                      ( name = 'LAST_USED'   text = TEXT-c09 )
-                                      ( name = 'PROPOSAL'    text = TEXT-c10 ) ).
     LOOP AT texts INTO DATA(text).
       TRY.
           DATA(column) = columns->get_column( text-name ).
@@ -481,6 +509,71 @@ CLASS lcl_alv IMPLEMENTATION.
           CONTINUE.
       ENDTRY.
     ENDLOOP.
+  ENDMETHOD.
+
+
+  METHOD on_double_click.
+    IF NOT line_exists( rows[ row ] ).
+      RETURN.
+    ENDIF.
+    show_findings( rows[ row ] ).
+  ENDMETHOD.
+
+
+  METHOD clean_core_findings.
+    DATA(details) = reader->finding_details( object_type = assessment-object_type
+                                             object_name = assessment-object_name ).
+    LOOP AT details REFERENCE INTO DATA(detail).
+      " only findings that stand for a level: other checks and technical messages stay out
+      DATA(level) = level_rules->level_of( VALUE #( object_type = assessment-object_type
+                                                    object_name = assessment-object_name
+                                                    check_name  = detail->check_name
+                                                    code        = detail->code
+                                                    kind        = detail->kind ) ).
+      IF level = zif_ccr_level_rules=>level-none.
+        CONTINUE.
+      ENDIF.
+      DATA(finding) = CORRESPONDING finding_row( detail->* ).
+      finding-level = level.
+      INSERT finding INTO TABLE result.
+    ENDLOOP.
+    SORT result BY level DESCENDING check_title code.
+  ENDMETHOD.
+
+
+  METHOD show_findings.
+    finding_list = clean_core_findings( assessment ).
+    IF finding_list IS INITIAL.
+      MESSAGE TEXT-e08 TYPE 'S'.
+      RETURN.
+    ENDIF.
+
+    TRY.
+        cl_salv_table=>factory( IMPORTING r_salv_table = DATA(popup)
+                                CHANGING  t_table      = finding_list ).
+        popup->set_screen_popup( start_column = 5
+                                 end_column   = 180
+                                 start_line   = 3
+                                 end_line     = 20 ).
+        popup->get_display_settings( )->set_list_header( |{ TEXT-t02 } { assessment-object_name }| ).
+        popup->get_columns( )->set_optimize( ).
+        name_columns( columns = popup->get_columns( )
+                      texts   = VALUE #( ( name = 'LEVEL'           text = TEXT-c03 )
+                                         ( name = 'CHECK_NAME'      text = TEXT-c20 )
+                                         ( name = 'CHECK_TITLE'     text = TEXT-c13 )
+                                         ( name = 'CODE'            text = TEXT-c14 )
+                                         ( name = 'KIND'            text = TEXT-c21 )
+                                         ( name = 'SUB_OBJECT'      text = TEXT-c15 )
+                                         ( name = 'LINE'            text = TEXT-c16 )
+                                         ( name = 'REF_OBJECT_TYPE' text = TEXT-c17 )
+                                         ( name = 'REF_OBJECT_NAME' text = TEXT-c18 )
+                                         ( name = 'SUCCESSOR'       text = TEXT-c19 ) ) ).
+        " the check class is in the title already
+        popup->get_columns( )->get_column( 'CHECK_NAME' )->set_visible( abap_false ).
+        popup->display( ).
+      CATCH cx_salv_msg cx_salv_not_found INTO DATA(failure).
+        MESSAGE failure TYPE 'S' DISPLAY LIKE 'E'.
+    ENDTRY.
   ENDMETHOD.
 
 
@@ -612,7 +705,8 @@ CLASS lcl_application IMPLEMENTATION.
     NEW lcl_alv( )->display( assessments = assessments
                              summary     = assessor->summarize( assessments )
                              run         = atc_run
-                             data_set    = data_set ).
+                             data_set    = data_set
+                             atc_reader  = atc_reader ).
   ENDMETHOD.
 
 
