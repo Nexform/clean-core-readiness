@@ -183,7 +183,7 @@ CLASS zcl_ccr_atc_reader IMPLEMENTATION.
     ENDIF.
 
     SELECT FROM tadir
-      FIELDS object, obj_name
+      FIELDS object, obj_name, devclass
       WHERE pgmid     = @whole_object
         AND object   IN @object_types
         AND devclass IN @package_range

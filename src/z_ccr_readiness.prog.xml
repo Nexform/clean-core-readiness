@@ -162,6 +162,12 @@
     </item>
     <item>
      <ID>I</ID>
+     <KEY>C23</KEY>
+     <ENTRY>Package</ENTRY>
+     <LENGTH>7</LENGTH>
+    </item>
+    <item>
+     <ID>I</ID>
      <KEY>E01</KEY>
      <ENTRY>The ATC run is not a complete run of this check variant</ENTRY>
      <LENGTH>55</LENGTH>
