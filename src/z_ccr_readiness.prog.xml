@@ -156,6 +156,24 @@
     </item>
     <item>
      <ID>I</ID>
+     <KEY>H03</KEY>
+     <ENTRY>Note</ENTRY>
+     <LENGTH>4</LENGTH>
+    </item>
+    <item>
+     <ID>I</ID>
+     <KEY>H04</KEY>
+     <ENTRY>Usage data covers less than a year: yearly jobs may show as not used</ENTRY>
+     <LENGTH>68</LENGTH>
+    </item>
+    <item>
+     <ID>I</ID>
+     <KEY>H05</KEY>
+     <ENTRY>Local usage data: Retire holds only if this system is the production system</ENTRY>
+     <LENGTH>75</LENGTH>
+    </item>
+    <item>
+     <ID>I</ID>
      <KEY>P01</KEY>
      <ENTRY>How to run ATC</ENTRY>
      <LENGTH>14</LENGTH>
