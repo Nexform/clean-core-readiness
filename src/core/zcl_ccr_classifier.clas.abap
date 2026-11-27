@@ -38,6 +38,12 @@ CLASS zcl_ccr_classifier IMPLEMENTATION.
                         level       = zif_ccr_level_rules=>level-a ) ).
 
     LOOP AT findings REFERENCE INTO DATA(finding).
+      " a narrower scope than the run must not bring in objects from outside it
+      IF objects IS NOT INITIAL
+         AND NOT line_exists( objects[ object_type = finding->object_type
+                                       object_name = finding->object_name ] ).
+        CONTINUE.
+      ENDIF.
       IF NOT line_exists( result[ object_type = finding->object_type
                                   object_name = finding->object_name ] ).
         INSERT VALUE #( object_type = finding->object_type

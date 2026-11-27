@@ -38,7 +38,7 @@ CLASS ltc_classifier DEFINITION FINAL FOR TESTING
     METHODS when_findings_then_counted FOR TESTING.
     METHODS when_same_name_then_by_type FOR TESTING.
     METHODS when_no_finding_then_a FOR TESTING.
-    METHODS when_unlisted_then_kept FOR TESTING.
+    METHODS when_unlisted_then_ignored FOR TESTING.
 
 ENDCLASS.
 
@@ -174,7 +174,7 @@ CLASS ltc_classifier IMPLEMENTATION.
   ENDMETHOD.
 
 
-  METHOD when_unlisted_then_kept.
+  METHOD when_unlisted_then_ignored.
     " ARRANGE
     DATA(objects) = VALUE zif_ccr_classifier=>object_keys( ( object_type = 'CLAS'
                                                              object_name = 'ZCL_LISTED' ) ).
@@ -194,12 +194,8 @@ CLASS ltc_classifier IMPLEMENTATION.
       exp = VALUE zif_ccr_classifier=>object_levels( ( object_type = 'CLAS'
                                                        object_name = 'ZCL_LISTED'
                                                        level       = zif_ccr_level_rules=>level-c
-                                                       findings_c  = 1 )
-                                                     ( object_type = 'CLAS'
-                                                       object_name = 'ZCL_UNLISTED'
-                                                       level       = zif_ccr_level_rules=>level-b
-                                                       findings_b  = 1 ) )
-      msg = `A listed object takes the level of its findings, an unlisted object with findings is kept` ).
+                                                       findings_c  = 1 ) )
+      msg = `The list is the scope: findings of an object outside it are left out` ).
   ENDMETHOD.
 
 ENDCLASS.

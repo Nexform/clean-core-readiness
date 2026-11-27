@@ -24,12 +24,13 @@ INTERFACE zif_ccr_classifier PUBLIC.
 
   "! Gives every checked object its clean core level: the worst level among its clean core
   "! findings, and level A when it has no clean core finding. An ATC result does not list the
-  "! objects it checked, so the caller passes them; an object that has a finding is part of the
-  "! answer also when it is missing from that list.
+  "! objects it checked, so the caller passes them. The list is the scope: findings of objects
+  "! outside it are left out. Without a list, every object of the findings is classified.
   "!
   "! @parameter findings | Findings of one ATC result, of all checks
-  "! @parameter objects  | The objects the ATC run checked
-  "! @parameter result   | The checked objects and the objects of the findings, with their level
+  "! @parameter objects  | The objects to assess, e.g. those of the packages the ATC run checked
+  "! @parameter result   | The objects of the list, or without a list those of the findings,
+  "!                        with their level
   METHODS classify
     IMPORTING findings      TYPE zif_ccr_level_rules=>findings
               objects       TYPE object_keys OPTIONAL
