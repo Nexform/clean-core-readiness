@@ -270,6 +270,24 @@
     </item>
     <item>
      <ID>I</ID>
+     <KEY>K01</KEY>
+     <ENTRY>Note</ENTRY>
+     <LENGTH>4</LENGTH>
+    </item>
+    <item>
+     <ID>I</ID>
+     <KEY>K02</KEY>
+     <ENTRY>Warning</ENTRY>
+     <LENGTH>7</LENGTH>
+    </item>
+    <item>
+     <ID>I</ID>
+     <KEY>K03</KEY>
+     <ENTRY>Error</ENTRY>
+     <LENGTH>5</LENGTH>
+    </item>
+    <item>
+     <ID>I</ID>
      <KEY>P01</KEY>
      <ENTRY>How to run ATC</ENTRY>
      <LENGTH>14</LENGTH>

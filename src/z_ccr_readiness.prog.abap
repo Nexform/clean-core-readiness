@@ -167,6 +167,7 @@ CLASS lcl_alv DEFINITION FINAL CREATE PUBLIC.
     "! A clean core finding of one object, as the popup shows it
     TYPES BEGIN OF finding_row.
     TYPES level TYPE zif_ccr_level_rules=>clean_core_level.
+    TYPES kind_text TYPE string.
     INCLUDE TYPE zif_ccr_atc_reader=>finding_detail.
     TYPES END OF finding_row.
     TYPES finding_rows TYPE STANDARD TABLE OF finding_row WITH EMPTY KEY.
@@ -536,6 +537,11 @@ CLASS lcl_alv IMPLEMENTATION.
       ENDIF.
       DATA(finding) = CORRESPONDING finding_row( detail->* ).
       finding-level = level.
+      finding-kind_text = SWITCH #( detail->kind
+                                    WHEN zif_ccr_level_rules=>finding_kind-note    THEN TEXT-k01
+                                    WHEN zif_ccr_level_rules=>finding_kind-warning THEN TEXT-k02
+                                    WHEN zif_ccr_level_rules=>finding_kind-error   THEN TEXT-k03
+                                    ELSE detail->kind ).
       INSERT finding INTO TABLE result.
     ENDLOOP.
     SORT result BY level DESCENDING check_title code.
@@ -563,14 +569,15 @@ CLASS lcl_alv IMPLEMENTATION.
                                          ( name = 'CHECK_NAME'      text = TEXT-c20 )
                                          ( name = 'CHECK_TITLE'     text = TEXT-c13 )
                                          ( name = 'CODE'            text = TEXT-c14 )
-                                         ( name = 'KIND'            text = TEXT-c21 )
+                                         ( name = 'KIND_TEXT'       text = TEXT-c21 )
                                          ( name = 'SUB_OBJECT'      text = TEXT-c15 )
                                          ( name = 'LINE'            text = TEXT-c16 )
                                          ( name = 'REF_OBJECT_TYPE' text = TEXT-c17 )
                                          ( name = 'REF_OBJECT_NAME' text = TEXT-c18 )
                                          ( name = 'SUCCESSOR'       text = TEXT-c19 ) ) ).
-        " the check class is in the title already
+        " the check class is in the title already, and the kind in words
         popup->get_columns( )->get_column( 'CHECK_NAME' )->set_visible( abap_false ).
+        popup->get_columns( )->get_column( 'KIND' )->set_visible( abap_false ).
         popup->display( ).
       CATCH cx_salv_msg cx_salv_not_found INTO DATA(failure).
         MESSAGE failure TYPE 'S' DISPLAY LIKE 'E'.
