@@ -3,7 +3,7 @@
 *#      |\\/\\//\|        -----------------------------------      #*
 *#      |        |       /      Report: Z_CCR_PROBE          \     #*
 *#      |  (*) (*)      /                                     \    #*
-*#      |       __)    /        Version: 1.4 ()                \   #*
+*#      |       __)    /        Version: 1.5 ()                \   #*
 *#     (C    _____\   /         Magic. Do not touch.            \  #*
 *#       \  (__(   --{-------------------------------------------} #*
 *#       |    /       \         Created By : George Drakos      /  #*
@@ -17,6 +17,13 @@
 *###################################################################*
 *&--------------------------------------------------------------------&*
 *&              M O D I F I C A T I O N    L O G                      &*
+*&--------------------------------------------------------------------&*
+*& Description    : Probe F for versions 0.4 to 0.6 - system of a run, *
+*&                  changelog, OData usage, RAP structure, where-used, *
+*&                  methods of findings, parts of larger objects       *
+*& Author         : George Drakos                                      *
+*& Date           : 28/11/2026                                         *
+*& Change Request :                                                    *
 *&--------------------------------------------------------------------&*
 *& Description    : Result key RAW(16) compared as host variable; FOR  *
 *&                  variable of NOTE_CONDITION renamed, NOTE is the one*
@@ -649,6 +656,235 @@ CLASS lcl_reader_probe DEFINITION FINAL CREATE PUBLIC.
 ENDCLASS.
 
 *&----------------------------------------------------------------------*
+*&CLASS lcl_roadmap_probe DEFINITION
+*&----------------------------------------------------------------------*
+"! Part F: what versions 0.4 to 0.6 need - the system an ATC run checked, the changelog for
+"! SAP objects, OData and RFC usage, RAP and service structure, where-used, usage per method
+"! and function module, classes that belong to a service or to an enhancement.
+CLASS lcl_roadmap_probe DEFINITION FINAL CREATE PUBLIC.
+
+  PUBLIC SECTION.
+    INTERFACES lif_probe.
+
+    TYPES: BEGIN OF roadmap_settings,
+             result_id       TYPE string,
+             usage_id        TYPE string,
+             package_pattern TYPE string,
+           END OF roadmap_settings.
+
+    METHODS constructor
+      IMPORTING output   TYPE REF TO lcl_output
+                catalog  TYPE REF TO lcl_catalog
+                settings TYPE roadmap_settings.
+
+  PRIVATE SECTION.
+    TYPES text_range TYPE RANGE OF dd02t-ddtext.
+    TYPES: BEGIN OF dynamic_query,
+             subject    TYPE string,
+             source     TYPE string,
+             field_list TYPE string,
+             condition  TYPE string,
+             sort_order TYPE string,
+             max_rows   TYPE i,
+           END OF dynamic_query.
+
+    CONSTANTS section_name TYPE string VALUE `F ROADMAP`.
+    CONSTANTS samples TYPE i VALUE 3.
+    CONSTANTS max_rows TYPE i VALUE 40.
+    CONSTANTS max_fields TYPE i VALUE 150.
+    CONSTANTS max_messages TYPE i VALUE 250.
+    CONSTANTS max_tables TYPE i VALUE 60.
+    CONSTANTS max_explored_tables TYPE i VALUE 8.
+    CONSTANTS max_service_names TYPE i VALUE 6.
+    CONSTANTS max_search_fields TYPE i VALUE 12.
+    CONSTANTS first_dropped_field TYPE i VALUE 13.
+    CONSTANTS min_name_length TYPE i VALUE 10.
+    CONSTANTS changelog_note TYPE string VALUE `0003758771`.
+    CONSTANTS api_usage_check TYPE string VALUE `CL_YCM_CC_CHECK_API_USAGE`.
+    CONSTANTS message_table TYPE string VALUE `SCIMESSAGES`.
+    CONSTANTS class_service TYPE string VALUE `CL_OO_CLASSNAME_SERVICE`.
+    CONSTANTS method_by_include TYPE abap_methname VALUE 'GET_METHOD_BY_INCLUDE'.
+    "! A class include of a method ends with CM and three characters, e.g. ...CM003
+    CONSTANTS method_include_pattern TYPE string VALUE `*CM+++`.
+    CONSTANTS any_include TYPE string VALUE `*`.
+    CONSTANTS usage_field TYPE string VALUE `USGID`.
+    CONSTANTS client_field TYPE string VALUE `MANDT`.
+    CONSTANTS character_type TYPE string VALUE `CHAR`.
+    CONSTANTS english TYPE sylangu VALUE 'E'.
+    CONSTANTS active TYPE as4local VALUE 'A'.
+    CONSTANTS transparent_table TYPE tabclass VALUE 'TRANSP'.
+    CONSTANTS database_view TYPE tabclass VALUE 'VIEW'.
+    CONSTANTS active_version TYPE seoclassdf-version VALUE '1'.
+    CONSTANTS behavior_pool TYPE seoclassdf-category VALUE '06'.
+    CONSTANTS local_data TYPE susg_admin-kind VALUE 'L'.
+    CONSTANTS: BEGIN OF object_type,
+                 class          TYPE trobjtype VALUE 'CLAS',
+                 function_group TYPE trobjtype VALUE 'FUGR',
+                 program        TYPE trobjtype VALUE 'PROG',
+                 cds_view       TYPE trobjtype VALUE 'DDLS',
+                 behavior       TYPE trobjtype VALUE 'BDEF',
+                 binding        TYPE trobjtype VALUE 'SRVB',
+                 service        TYPE trobjtype VALUE 'SRVD',
+                 enhancement    TYPE trobjtype VALUE 'ENHO',
+               END OF object_type.
+
+    DATA output TYPE REF TO lcl_output.
+    DATA catalog TYPE REF TO lcl_catalog.
+    DATA settings TYPE roadmap_settings.
+    "! Usage data set of the SUSG queries - the dynamic conditions name it as host variable
+    DATA usage_key TYPE x LENGTH 16.
+    "! Findings of the run P_RESID
+    DATA findings TYPE scit_rest.
+
+    METHODS choose_usage_data.
+    METHODS read_findings.
+
+    "! F1: which system a run checked - fields of the result tables and the header of the run.
+    METHODS report_run_system.
+
+    "! F2: the changelog for SAP objects (SAP Note 3758771) and the messages of "Usage of APIs".
+    METHODS report_changelog.
+
+    "! F3: OData and RFC usage in SUSG, rows of the services of P_PKGP.
+    METHODS report_usage_views.
+
+    "! F4: behavior pools, behavior definitions, service bindings and definitions.
+    METHODS report_rap_structure.
+
+    "! F5: where-used rows of objects with findings.
+    METHODS report_where_used.
+
+    "! F6: method and function module of a finding, and the usage per procedure in SUSG.
+    METHODS report_procedures.
+
+    "! F7: OData classes (DPC, MPC) and enhancement implementations - the larger object they belong to.
+    METHODS report_parts.
+
+    METHODS report_class
+      IMPORTING subject    TYPE string
+                class_name TYPE string.
+
+    METHODS report_methods
+      IMPORTING subject    TYPE string
+                class_name TYPE string.
+
+    METHODS report_function_group
+      IMPORTING subject TYPE string
+                group   TYPE string.
+
+    METHODS report_object_usage
+      IMPORTING subject     TYPE string
+                object_type TYPE trobjtype
+                object_name TYPE string.
+
+    METHODS report_findings_of
+      IMPORTING subject     TYPE string
+                object_type TYPE trobjtype
+                object_name TYPE string.
+
+    METHODS report_enhancement_parts
+      IMPORTING subject TYPE string.
+
+    METHODS report_messages
+      IMPORTING subject TYPE string
+                check   TYPE string.
+
+    "! Names and texts of tables and views whose English description matches one of the patterns.
+    METHODS tables_described_as
+      IMPORTING subject       TYPE string
+                patterns      TYPE string_table
+      RETURNING VALUE(result) TYPE string_table.
+
+    "! Rows of a table or view with one of the names in a character field - restricted to the
+    "! usage data set when the source has one.
+    METHODS rows_mentioning
+      IMPORTING subject TYPE string
+                source  TYPE string
+                !values TYPE string_table
+                partial TYPE abap_bool.
+
+    METHODS name_condition
+      IMPORTING fields        TYPE string_table
+                !values       TYPE string_table
+                partial       TYPE abap_bool
+      RETURNING VALUE(result) TYPE string.
+
+    METHODS select_rows
+      IMPORTING query TYPE dynamic_query.
+
+    METHODS fields_of
+      IMPORTING source        TYPE string
+      RETURNING VALUE(result) TYPE ddfields.
+
+    METHODS package_objects
+      IMPORTING object_type   TYPE trobjtype
+      RETURNING VALUE(result) TYPE string_table.
+
+    "! Objects of a type with findings in the run and in P_PKGP; without findings the first objects of P_PKGP.
+    METHODS objects_with_findings
+      IMPORTING object_type     TYPE trobjtype
+                include_pattern TYPE string DEFAULT any_include
+      RETURNING VALUE(result)   TYPE string_table.
+
+    METHODS includes_with_findings
+      IMPORTING class_name    TYPE string
+      RETURNING VALUE(result) TYPE string_table.
+
+    METHODS behavior_pools
+      RETURNING VALUE(result) TYPE string_table.
+
+    METHODS function_modules
+      IMPORTING group         TYPE string
+      RETURNING VALUE(result) TYPE string_table.
+
+    METHODS main_program_of
+      IMPORTING group         TYPE string
+      RETURNING VALUE(result) TYPE string.
+
+    METHODS service_terms
+      RETURNING VALUE(result) TYPE string_table.
+
+    METHODS quoted_list
+      IMPORTING names         TYPE string_table
+      RETURNING VALUE(result) TYPE string.
+
+    METHODS source_lines
+      IMPORTING subject TYPE string
+                include TYPE string
+                pattern TYPE string.
+
+    "! Calls CL_OO_CLASSNAME_SERVICE=>GET_METHOD_BY_INCLUDE with the parameters its signature has.
+    METHODS method_of_include
+      IMPORTING include       TYPE string
+      RETURNING VALUE(result) TYPE string.
+
+    "! One entry per parameter of GET_METHOD_BY_INCLUDE, the include in its importing parameter.
+    METHODS include_parameters
+      IMPORTING descriptor    TYPE REF TO cl_abap_objectdescr
+                include       TYPE string
+      RETURNING VALUE(result) TYPE abap_parmbind_tab.
+
+    METHODS parameter_data
+      IMPORTING descriptor    TYPE REF TO cl_abap_objectdescr
+                method_name   TYPE abap_methname
+                parameter     TYPE abap_parmname
+      RETURNING VALUE(result) TYPE REF TO data.
+
+    METHODS caller_kind
+      IMPORTING kind          TYPE abap_parmkind
+      RETURNING VALUE(result) TYPE abap_parmkind.
+
+    METHODS returned_text
+      IMPORTING parameters    TYPE abap_parmbind_tab
+      RETURNING VALUE(result) TYPE string.
+
+    METHODS value_text
+      IMPORTING value         TYPE any
+      RETURNING VALUE(result) TYPE string.
+
+ENDCLASS.
+
+*&----------------------------------------------------------------------*
 *&CLASS lcl_application DEFINITION
 *&----------------------------------------------------------------------*
 "! Composition root of the program: wires the probes the selection screen asks for and runs them.
@@ -669,9 +905,13 @@ CLASS lcl_application DEFINITION FINAL CREATE PUBLIC.
              sample_size    TYPE i,
              masks_users    TYPE abap_bool,
              file_path      TYPE string,
+             probes_roadmap TYPE abap_bool,
+             usage_id       TYPE string,
            END OF screen_selection.
 
     CLASS-METHODS label_screen.
+
+    CLASS-METHODS label_roadmap_and_output.
 
     CLASS-METHODS ask_file_path
       RETURNING VALUE(result) TYPE string.
@@ -741,12 +981,21 @@ SELECTION-SCREEN END OF BLOCK sc_brdr.
 
 SELECTION-SCREEN BEGIN OF BLOCK sc_bchk WITH FRAME TITLE sc_tchk.
 SELECTION-SCREEN BEGIN OF LINE.
-PARAMETERS p_chk AS CHECKBOX DEFAULT 'X'.
+PARAMETERS p_chk AS CHECKBOX.
 SELECTION-SCREEN COMMENT 3(66) sc_cchk FOR FIELD p_chk.
 SELECTION-SCREEN END OF LINE.
 SELECTION-SCREEN COMMENT /1(70) sc_cpkp.
 PARAMETERS p_pkgp TYPE c LENGTH 30.
 SELECTION-SCREEN END OF BLOCK sc_bchk.
+
+SELECTION-SCREEN BEGIN OF BLOCK sc_brdm WITH FRAME TITLE sc_trdm.
+SELECTION-SCREEN BEGIN OF LINE.
+PARAMETERS p_road AS CHECKBOX DEFAULT 'X'.
+SELECTION-SCREEN COMMENT 3(66) sc_croad FOR FIELD p_road.
+SELECTION-SCREEN END OF LINE.
+SELECTION-SCREEN COMMENT /1(70) sc_cusid.
+PARAMETERS p_usgid TYPE c LENGTH 32.
+SELECTION-SCREEN END OF BLOCK sc_brdm.
 
 SELECTION-SCREEN BEGIN OF BLOCK sc_bout WITH FRAME TITLE sc_tout.
 SELECTION-SCREEN COMMENT /1(70) sc_crows.
@@ -787,7 +1036,9 @@ START-OF-SELECTION.
                                 check_variant  = p_chkv
                                 sample_size    = p_rows
                                 masks_users    = p_mask
-                                file_path      = p_file )
+                                file_path      = p_file
+                                probes_roadmap = p_road
+                                usage_id       = p_usgid )
     )->run( ).
 *&---------------------------------------------------------------------*
 *& END OF EXECUTABLE CODE
@@ -2322,6 +2573,709 @@ CLASS lcl_reader_probe IMPLEMENTATION.
 ENDCLASS.
 
 *&----------------------------------------------------------------------*
+*&CLASS lcl_roadmap_probe IMPLEMENTATION
+*&----------------------------------------------------------------------*
+CLASS lcl_roadmap_probe IMPLEMENTATION.
+
+  METHOD constructor.
+    me->output   = output.
+    me->catalog  = catalog.
+    me->settings = settings.
+  ENDMETHOD.
+
+  METHOD lif_probe~run.
+    output->begin_section( section_name ).
+    choose_usage_data( ).
+    read_findings( ).
+    report_run_system( ).
+    report_changelog( ).
+    report_usage_views( ).
+    report_rap_structure( ).
+    report_where_used( ).
+    report_procedures( ).
+    report_parts( ).
+  ENDMETHOD.
+
+  METHOD choose_usage_data.
+    IF settings-usage_id IS NOT INITIAL.
+      usage_key = settings-usage_id.
+      output->add( subject = `USAGE DATA`
+                   item    = `from P_USGID`
+                   content = settings-usage_id ).
+      RETURN.
+    ENDIF.
+
+    SELECT FROM susg_admin
+      FIELDS usgid
+      WHERE kind = @local_data
+      ORDER BY usgid
+      INTO TABLE @DATA(local_sets)
+      UP TO 1 ROWS.
+    IF local_sets IS INITIAL.
+      output->add( subject = `USAGE DATA`
+                   item    = lcl_output=>label-missing
+                   content = `no local data set - give P_USGID` ).
+      RETURN.
+    ENDIF.
+    usage_key = local_sets[ 1 ]-usgid.
+    output->add( subject = `USAGE DATA`
+                 item    = `local data set`
+                 content = |{ usage_key }| ).
+  ENDMETHOD.
+
+  METHOD read_findings.
+    DATA access TYPE REF TO if_satc_result_access.
+    DATA result_id TYPE satc_d_result_id.
+
+    IF settings-result_id IS INITIAL.
+      output->add( subject = `FINDINGS`
+                   item    = lcl_output=>label-missing
+                   content = `P_RESID is empty - F5 and F6 take the first objects of P_PKGP` ).
+      RETURN.
+    ENDIF.
+    TRY.
+        result_id = settings-result_id.
+        access ?= NEW cl_satc_api_factory( )->create_result_access( result_id ).
+        access->get_findings( IMPORTING e_findings = findings ).
+        output->add( subject = `FINDINGS`
+                     item    = lcl_output=>label-row_count
+                     content = |{ lines( findings ) }| ).
+      CATCH cx_root INTO DATA(failure).
+        output->add_failure( subject = `FINDINGS`
+                             failure = failure ).
+    ENDTRY.
+  ENDMETHOD.
+
+  METHOD report_run_system.
+    DATA(subject) = `F1 RUN SYSTEM`.
+    output->add( subject = subject
+                 item    = `SY-SYSID`
+                 content = sy-sysid ).
+    IF settings-result_id IS INITIAL.
+      output->add( subject = subject
+                   item    = lcl_output=>label-missing
+                   content = `P_RESID is empty` ).
+      RETURN.
+    ENDIF.
+
+    " every field of the header of the run, with its value
+    catalog->explore_source( source = `SATC_AC_RESULTH`
+                             filter = VALUE #( key_fields = VALUE #( ( `DISPLAY_ID` ) )
+                                               key_value  = settings-result_id ) ).
+    " fields of the ATC tables that may name the checked system or a destination to it
+    catalog->run_query( VALUE #( subject    = |{ subject } fields|
+                                 source     = `DD03L`
+                                 field_list = `TABNAME, FIELDNAME, ROLLNAME`
+                                 condition  = `TABNAME LIKE 'SATC%' AND AS4LOCAL = 'A' AND ( FIELDNAME LIKE '%SYS%' ` &&
+                                              `OR FIELDNAME LIKE '%SID%' OR FIELDNAME LIKE '%DEST%' ` &&
+                                              `OR FIELDNAME LIKE '%RFC%' )`
+                                 sort_order = `TABNAME, FIELDNAME`
+                                 max_rows   = max_fields ) ).
+  ENDMETHOD.
+
+  METHOD report_changelog.
+    DATA(subject) = `F2 CHANGELOG`.
+    catalog->run_query( VALUE #( subject    = |{ subject } note 3758771|
+                                 source     = `CWBNTCUST`
+                                 field_list = `*`
+                                 condition  = |NUMM = '{ changelog_note }'|
+                                 max_rows   = max_rows ) ).
+    tables_described_as( subject  = |{ subject } tables|
+                         patterns = VALUE #( ( `*hangelog*` ) ( `*hange log*` ) ( `*HANGELOG*` ) ) ).
+    catalog->list_objects( VALUE #( names = lcl_catalog=>names_like( VALUE #( ( `*CHANGELOG*` ) ) ) ) ).
+    " attribute names a finding can carry - a changelog attribute would show here
+    catalog->run_query( VALUE #( subject    = |{ subject } attribute names|
+                                 source     = `SCA_ATTR_DDLV`
+                                 field_list = `*`
+                                 max_rows   = max_messages ) ).
+    report_messages( subject = |{ subject } { api_usage_check }|
+                     check   = api_usage_check ).
+  ENDMETHOD.
+
+  METHOD report_usage_views.
+    DATA(subject) = `F3 SUSG`.
+    catalog->list_objects( VALUE #( names        = lcl_catalog=>names_like( VALUE #( ( `SUSG_I*` ) ) )
+                                    object_types = lcl_catalog=>types_of( VALUE #( ( `DDLS` ) ) ) ) ).
+    DATA(sources) = VALUE string_table( ( `SUSG_I_ODATA` ) ( `SUSG_I_RDATA` ) ).
+    LOOP AT sources INTO DATA(source).
+      catalog->explore_source( source = source
+                               filter = VALUE #( key_fields = VALUE #( ( usage_field ) )
+                                                 key_value  = |{ usage_key }| ) ).
+    ENDLOOP.
+    DATA(terms) = service_terms( ).
+    output->add_rows( subject  = |{ subject } service names of P_PKGP|
+                      rows     = terms
+                      max_rows = max_service_names ).
+    rows_mentioning( subject = |{ subject } SUSG_I_ODATA rows of these services|
+                     source  = `SUSG_I_ODATA`
+                     values  = terms
+                     partial = abap_true ).
+  ENDMETHOD.
+
+  METHOD report_rap_structure.
+    DATA(subject) = `F4 RAP`.
+    DATA(pools) = behavior_pools( ).
+    LOOP AT pools INTO DATA(pool).
+      report_class( subject    = |{ subject } { pool }|
+                    class_name = pool ).
+    ENDLOOP.
+
+    DATA(behaviors) = package_objects( object_type-behavior ).
+    DATA(bindings) = package_objects( object_type-binding ).
+    DATA(services) = package_objects( object_type-service ).
+    DATA(names) = VALUE string_table( ( LINES OF behaviors ) ( LINES OF bindings ) ( LINES OF services ) ).
+    output->add_rows( subject  = |{ subject } BDEF, SRVB, SRVD of P_PKGP|
+                      rows     = names
+                      max_rows = max_rows ).
+    DATA(tables) = tables_described_as( subject  = |{ subject } tables|
+                                        patterns = VALUE #( ( `*ehavior*` )
+                                                            ( `*ervice binding*` ) ( `*ervice Binding*` )
+                                                            ( `*ervice definition*` ) ( `*ervice Definition*` ) ) ).
+    LOOP AT tables INTO DATA(table_name) TO max_explored_tables.
+      rows_mentioning( subject = |{ subject } { table_name }|
+                       source  = table_name
+                       values  = names
+                       partial = abap_false ).
+    ENDLOOP.
+  ENDMETHOD.
+
+  METHOD report_where_used.
+    DATA(subject) = `F5 WHERE-USED`.
+    DATA(classes) = objects_with_findings( object_type-class ).
+    DATA(cds_views) = objects_with_findings( object_type-cds_view ).
+    DATA(names) = VALUE string_table( ( LINES OF classes ) ( LINES OF cds_views ) ).
+    output->add_rows( subject  = |{ subject } objects|
+                      rows     = names
+                      max_rows = max_rows ).
+    catalog->run_query( VALUE #( subject    = |{ subject } WBCROSSGT|
+                                 source     = `WBCROSSGT`
+                                 field_list = `*`
+                                 condition  = |NAME IN ( { quoted_list( names ) } )|
+                                 sort_order = `NAME`
+                                 max_rows   = max_rows ) ).
+    catalog->run_query( VALUE #( subject    = |{ subject } DDLDEPENDENCY|
+                                 source     = `DDLDEPENDENCY`
+                                 field_list = `*`
+                                 condition  = |DDLNAME IN ( { quoted_list( names ) } )|
+                                 max_rows   = max_rows ) ).
+
+    DATA(groups) = objects_with_findings( object_type-function_group ).
+    IF groups IS NOT INITIAL.
+      catalog->run_query( VALUE #( subject    = |{ subject } CROSS|
+                                   source     = `CROSS`
+                                   field_list = `*`
+                                   condition  = |NAME IN ( { quoted_list( function_modules( groups[ 1 ] ) ) } )|
+                                   sort_order = `NAME`
+                                   max_rows   = max_rows ) ).
+    ENDIF.
+    tables_described_as( subject  = |{ subject } tables|
+                         patterns = VALUE #( ( `*here-used*` ) ( `*here used*` ) ( `*ross-ref*` ) ( `*ross ref*` )
+                                             ( `*ependenc*` ) ) ).
+  ENDMETHOD.
+
+  METHOD report_procedures.
+    DATA(subject) = `F6 PROCEDURES`.
+    DATA(classes) = objects_with_findings( object_type     = object_type-class
+                                           include_pattern = method_include_pattern ).
+    LOOP AT classes INTO DATA(class_name).
+      report_methods( subject    = |{ subject } { class_name }|
+                      class_name = class_name ).
+    ENDLOOP.
+
+    DATA(groups) = objects_with_findings( object_type-function_group ).
+    IF groups IS NOT INITIAL.
+      report_function_group( subject = |{ subject } { groups[ 1 ] }|
+                             group   = groups[ 1 ] ).
+    ENDIF.
+
+    DATA(programs) = objects_with_findings( object_type-program ).
+    IF programs IS NOT INITIAL.
+      report_findings_of( subject     = |{ subject } { programs[ 1 ] }|
+                          object_type = object_type-program
+                          object_name = programs[ 1 ] ).
+      report_object_usage( subject     = |{ subject } { programs[ 1 ] }|
+                           object_type = object_type-program
+                           object_name = programs[ 1 ] ).
+    ENDIF.
+  ENDMETHOD.
+
+  METHOD report_parts.
+    DATA(subject) = `F7 PARTS`.
+    DATA(service_classes) = VALUE string_table( FOR name IN package_objects( object_type-class )
+                                                WHERE ( table_line CP '*DPC*' OR table_line CP '*MPC*' )
+                                                ( name ) ).
+    LOOP AT service_classes INTO DATA(class_name) TO max_service_names.
+      catalog->run_query( VALUE #( subject    = |{ subject } { class_name } SEOMETAREL|
+                                   source     = `SEOMETAREL`
+                                   field_list = `*`
+                                   condition  = |CLSNAME = { cl_abap_dyn_prg=>quote( class_name ) }|
+                                   max_rows   = max_rows ) ).
+    ENDLOOP.
+
+    " the service registry of the gateway names the classes of a service
+    DATA(registry) = catalog->object_names(
+                         VALUE #( names        = lcl_catalog=>names_like( VALUE #( ( `/IWBEP/I_MGW*` ) ) )
+                                  object_types = lcl_catalog=>types_of( VALUE #( ( `TABL` ) ) ) ) ).
+    output->add_rows( subject  = |{ subject } gateway tables|
+                      rows     = registry
+                      max_rows = max_tables ).
+    LOOP AT registry INTO DATA(table_name) TO max_explored_tables.
+      rows_mentioning( subject = |{ subject } { table_name }|
+                       source  = table_name
+                       values  = service_classes
+                       partial = abap_false ).
+    ENDLOOP.
+    report_enhancement_parts( subject ).
+  ENDMETHOD.
+
+  METHOD report_class.
+    DATA(quoted) = cl_abap_dyn_prg=>quote( class_name ).
+    catalog->run_query( VALUE #( subject    = |{ subject } SEOCLASSDF|
+                                 source     = `SEOCLASSDF`
+                                 field_list = `*`
+                                 condition  = |CLSNAME = { quoted } AND VERSION = '1'|
+                                 max_rows   = 1 ) ).
+    catalog->run_query( VALUE #( subject    = |{ subject } SEOMETAREL|
+                                 source     = `SEOMETAREL`
+                                 field_list = `*`
+                                 condition  = |CLSNAME = { quoted }|
+                                 max_rows   = max_rows ) ).
+    " the definition of a behavior pool names its behavior definition: FOR BEHAVIOR OF ...
+    source_lines( subject = |{ subject } definition|
+                  include = |{ class_name WIDTH = 30 PAD = '=' }CU|
+                  pattern = `BEHAVIOR` ).
+  ENDMETHOD.
+
+  METHOD report_methods.
+    catalog->run_query( VALUE #( subject    = |{ subject } TMDIR|
+                                 source     = `TMDIR`
+                                 field_list = `*`
+                                 condition  = |CLSNAME = { cl_abap_dyn_prg=>quote( class_name ) }|
+                                 sort_order = `METHODINDX`
+                                 max_rows   = max_rows ) ).
+    report_findings_of( subject     = subject
+                        object_type = object_type-class
+                        object_name = class_name ).
+    DATA(includes) = includes_with_findings( class_name ).
+    LOOP AT includes INTO DATA(include).
+      output->add( subject = |{ subject } method of include|
+                   item    = include
+                   content = method_of_include( include ) ).
+    ENDLOOP.
+    report_object_usage( subject     = subject
+                         object_type = object_type-class
+                         object_name = class_name ).
+  ENDMETHOD.
+
+  METHOD report_function_group.
+    catalog->run_query( VALUE #( subject    = |{ subject } TFDIR|
+                                 source     = `TFDIR`
+                                 field_list = `*`
+                                 condition  = |PNAME = { cl_abap_dyn_prg=>quote( main_program_of( group ) ) }|
+                                 sort_order = `INCLUDE`
+                                 max_rows   = max_rows ) ).
+    report_findings_of( subject     = subject
+                        object_type = object_type-function_group
+                        object_name = group ).
+    report_object_usage( subject     = subject
+                         object_type = object_type-function_group
+                         object_name = group ).
+  ENDMETHOD.
+
+  METHOD report_object_usage.
+    DATA(type_name) = object_type.
+    DATA(name) = CONV sobj_name( object_name ).
+    SELECT FROM susg_i_data
+      FIELDS sub_type, sub_name, classname, SUM( counter ) AS executions, MAX( last_used ) AS last_used
+      WHERE usgid    = @usage_key
+        AND obj_type = @type_name
+        AND obj_name = @name
+      GROUP BY sub_type, sub_name, classname
+      ORDER BY sub_type, sub_name, classname
+      INTO TABLE @DATA(procedures)
+      UP TO @max_rows ROWS.
+    output->add( subject = |{ subject } SUSG procedures|
+                 item    = lcl_output=>label-row_count
+                 content = |{ lines( procedures ) }| ).
+    output->add_rows( subject  = |{ subject } SUSG procedures|
+                      rows     = procedures
+                      max_rows = max_rows ).
+  ENDMETHOD.
+
+  METHOD report_findings_of.
+    DATA(rows) = VALUE scit_rest( FOR finding IN findings
+                                  WHERE ( objtype = object_type AND objname = object_name )
+                                  ( finding ) ).
+    output->add_rows( subject  = |{ subject } findings|
+                      rows     = rows
+                      max_rows = max_rows ).
+  ENDMETHOD.
+
+  METHOD report_enhancement_parts.
+    DATA(enhancements) = package_objects( object_type-enhancement ).
+    IF enhancements IS INITIAL.
+      enhancements = catalog->object_names(
+                         VALUE #( names        = lcl_catalog=>names_like( VALUE #( ( `Y*` ) ( `Z*` ) ) )
+                                  object_types = lcl_catalog=>types_of( VALUE #( ( `ENHO` ) ) ) ) ).
+    ENDIF.
+    DATA(chosen) = VALUE string_table( FOR name IN enhancements FROM 1 TO samples ( name ) ).
+    output->add_rows( subject  = |{ subject } ENHO|
+                      rows     = chosen
+                      max_rows = samples ).
+
+    " known tables of the enhancement framework first, then what the dictionary describes so
+    DATA(described) = tables_described_as( subject  = |{ subject } tables|
+                                           patterns = VALUE #( ( `*BAdI*mplement*` ) ( `*nhancement*mplement*` ) ) ).
+    DATA(tables) = VALUE string_table( ( `ENHHEADER` ) ( `ENHOBJ` ) ( `BADIIMPL_ENH` ) ( `SXC_EXIT` ) ( `SXC_CLASS` )
+                                       ( LINES OF described ) ).
+    LOOP AT tables INTO DATA(table_name) TO max_explored_tables.
+      rows_mentioning( subject = |{ subject } { table_name }|
+                       source  = table_name
+                       values  = chosen
+                       partial = abap_false ).
+    ENDLOOP.
+  ENDMETHOD.
+
+  METHOD report_messages.
+    DATA check_instance TYPE REF TO object.
+    FIELD-SYMBOLS <messages> TYPE ANY TABLE.
+
+    TRY.
+        CREATE OBJECT check_instance TYPE (check).
+        ASSIGN check_instance->(message_table) TO <messages>.
+        IF sy-subrc <> 0.
+          output->add( subject = subject
+                       item    = lcl_output=>label-missing ).
+          RETURN.
+        ENDIF.
+        output->add_rows( subject  = subject
+                          rows     = <messages>
+                          max_rows = max_messages ).
+      CATCH cx_root INTO DATA(failure).
+        output->add_failure( subject = subject
+                             failure = failure ).
+    ENDTRY.
+  ENDMETHOD.
+
+  METHOD tables_described_as.
+    DATA(texts) = VALUE text_range( FOR pattern IN patterns
+                                    ( sign   = 'I'
+                                      option = 'CP'
+                                      low    = pattern ) ).
+    SELECT FROM dd02t AS description
+      INNER JOIN dd02l AS directory
+        ON  directory~tabname  = description~tabname
+        AND directory~as4local = description~as4local
+        AND directory~as4vers  = description~as4vers
+      FIELDS description~tabname, description~ddtext
+      WHERE description~ddlanguage = @english
+        AND description~as4local   = @active
+        AND description~ddtext    IN @texts
+        AND directory~tabclass    IN ( @transparent_table, @database_view )
+      ORDER BY description~tabname
+      INTO TABLE @DATA(tables)
+      UP TO @max_tables ROWS.
+    output->add( subject = subject
+                 item    = lcl_output=>label-row_count
+                 content = |{ lines( tables ) }| ).
+    output->add_rows( subject  = subject
+                      rows     = tables
+                      max_rows = max_tables ).
+    result = VALUE #( FOR found IN tables ( CONV #( found-tabname ) ) ).
+  ENDMETHOD.
+
+  METHOD rows_mentioning.
+    DATA(fields) = fields_of( source ).
+    DATA(names) = VALUE string_table( FOR field IN fields
+                                      WHERE ( datatype = character_type AND leng >= min_name_length
+                                              AND fieldname <> client_field )
+                                      ( CONV #( field-fieldname ) ) ).
+    IF values IS INITIAL OR names IS INITIAL.
+      output->add( subject = subject
+                   item    = lcl_output=>label-missing
+                   content = |{ lines( values ) } names, { lines( names ) } character fields| ).
+      RETURN.
+    ENDIF.
+    IF lines( names ) > max_search_fields.
+      DELETE names FROM first_dropped_field.
+    ENDIF.
+
+    DATA(condition) = name_condition( fields  = names
+                                      values  = values
+                                      partial = partial ).
+    IF line_exists( fields[ fieldname = usage_field ] ).
+      condition = |USGID = @USAGE_KEY AND { condition }|.
+    ENDIF.
+    select_rows( VALUE #( subject    = subject
+                          source     = source
+                          field_list = `*`
+                          condition  = condition
+                          max_rows   = max_rows ) ).
+  ENDMETHOD.
+
+  METHOD name_condition.
+    DATA(exact_list) = quoted_list( values ).
+    DATA(patterns) = VALUE string_table( FOR value IN values
+                                         ( cl_abap_dyn_prg=>quote( |%{ value }%| ) ) ).
+    DATA(comparisons) = VALUE string_table(
+        FOR field IN fields
+        ( COND #( WHEN partial = abap_true
+                  THEN concat_lines_of( table = VALUE string_table( FOR pattern IN patterns
+                                                                    ( |{ field } LIKE { pattern }| ) )
+                                        sep   = ` OR ` )
+                  ELSE |{ field } IN ( { exact_list } )| ) ) ).
+    result = |( { concat_lines_of( table = comparisons
+                                   sep   = ` OR ` ) } )|.
+  ENDMETHOD.
+
+  METHOD select_rows.
+    DATA rows TYPE REF TO data.
+    FIELD-SYMBOLS <rows> TYPE STANDARD TABLE.
+
+    TRY.
+        CREATE DATA rows TYPE STANDARD TABLE OF (query-source) WITH EMPTY KEY.
+        ASSIGN rows->* TO <rows>.
+        SELECT FROM (query-source)
+          FIELDS (query-field_list)
+          WHERE (query-condition)
+          ORDER BY (query-sort_order)
+          INTO CORRESPONDING FIELDS OF TABLE @<rows>
+          UP TO @query-max_rows ROWS.
+        output->add( subject = query-subject
+                     item    = lcl_output=>label-row_count
+                     content = |{ lines( <rows> ) }| ).
+        output->add_rows( subject  = query-subject
+                          rows     = <rows>
+                          max_rows = query-max_rows ).
+      CATCH cx_sy_create_data_error cx_sy_dynamic_osql_error cx_sy_open_sql_db INTO DATA(failure).
+        output->add_failure( subject = query-subject
+                             failure = failure ).
+    ENDTRY.
+  ENDMETHOD.
+
+  METHOD fields_of.
+    DATA source_type TYPE REF TO cl_abap_typedescr.
+
+    cl_abap_typedescr=>describe_by_name( EXPORTING  p_name      = source
+                                         RECEIVING  p_descr_ref = source_type
+                                         EXCEPTIONS OTHERS      = 1 ).
+    IF sy-subrc <> 0 OR source_type->kind <> cl_abap_typedescr=>kind_struct.
+      RETURN.
+    ENDIF.
+    DATA(structure) = CAST cl_abap_structdescr( source_type ).
+    structure->get_ddic_field_list( EXPORTING  p_langu      = english
+                                    RECEIVING  p_field_list = result
+                                    EXCEPTIONS OTHERS       = 1 ).
+    IF sy-subrc <> 0.
+      CLEAR result.
+    ENDIF.
+  ENDMETHOD.
+
+  METHOD package_objects.
+    IF settings-package_pattern IS INITIAL.
+      RETURN.
+    ENDIF.
+    result = catalog->object_names(
+                 VALUE #( packages     = lcl_catalog=>packages_like( VALUE #( ( settings-package_pattern ) ) )
+                          object_types = lcl_catalog=>types_of( VALUE #( ( CONV #( object_type ) ) ) ) ) ).
+  ENDMETHOD.
+
+  METHOD objects_with_findings.
+    DATA(in_package) = package_objects( object_type ).
+    LOOP AT findings REFERENCE INTO DATA(finding)
+         WHERE objtype = object_type AND sobjname CP include_pattern.
+      IF     ( in_package IS INITIAL OR line_exists( in_package[ table_line = finding->objname ] ) )
+         AND NOT line_exists( result[ table_line = finding->objname ] ).
+        INSERT CONV string( finding->objname ) INTO TABLE result.
+      ENDIF.
+      IF lines( result ) >= samples.
+        RETURN.
+      ENDIF.
+    ENDLOOP.
+    IF result IS INITIAL.
+      result = VALUE #( FOR name IN in_package FROM 1 TO samples ( name ) ).
+    ENDIF.
+  ENDMETHOD.
+
+  METHOD includes_with_findings.
+    LOOP AT findings REFERENCE INTO DATA(finding)
+         WHERE objtype = object_type-class AND objname = class_name AND sobjname CP method_include_pattern.
+      IF NOT line_exists( result[ table_line = finding->sobjname ] ).
+        INSERT CONV string( finding->sobjname ) INTO TABLE result.
+      ENDIF.
+      IF lines( result ) >= samples.
+        RETURN.
+      ENDIF.
+    ENDLOOP.
+  ENDMETHOD.
+
+  METHOD behavior_pools.
+    DATA(classes) = VALUE lcl_catalog=>name_range( FOR name IN package_objects( object_type-class )
+                                                   ( sign   = 'I'
+                                                     option = 'EQ'
+                                                     low    = name ) ).
+    IF classes IS INITIAL.
+      RETURN.
+    ENDIF.
+    SELECT FROM seoclassdf
+      FIELDS clsname
+      WHERE clsname IN @classes
+        AND version  = @active_version
+        AND category = @behavior_pool
+      ORDER BY clsname
+      INTO TABLE @DATA(pools)
+      UP TO @samples ROWS.
+    result = VALUE #( FOR pool IN pools ( CONV #( pool-clsname ) ) ).
+  ENDMETHOD.
+
+  METHOD function_modules.
+    DATA(main_program) = CONV tfdir-pname( main_program_of( group ) ).
+    SELECT FROM tfdir
+      FIELDS funcname
+      WHERE pname = @main_program
+      ORDER BY funcname
+      INTO TABLE @DATA(modules)
+      UP TO @max_rows ROWS.
+    result = VALUE #( FOR module IN modules ( CONV #( module-funcname ) ) ).
+  ENDMETHOD.
+
+  METHOD main_program_of.
+    DATA namespace TYPE string.
+    DATA rest TYPE string.
+
+    " the main program of a function group is SAPL<group>, after the namespace if there is one
+    FIND PCRE `^(/[^/]+/)(.+)$` IN group SUBMATCHES namespace rest.
+    result = COND #( WHEN sy-subrc = 0 THEN |{ namespace }SAPL{ rest }| ELSE |SAPL{ group }| ).
+  ENDMETHOD.
+
+  METHOD service_terms.
+    DATA(bindings) = package_objects( object_type-binding ).
+    DATA(services) = package_objects( object_type-service ).
+    DATA(names) = VALUE string_table( ( LINES OF bindings ) ( LINES OF services ) ).
+    LOOP AT names INTO DATA(name) TO max_service_names.
+      " without namespace and without the binding suffix _O2, _O4, _V2, _V4
+      DATA(term) = replace( val  = name
+                            pcre = `^/[^/]+/`
+                            with = `` ).
+      DATA(stripped) = replace( val  = term
+                                pcre = `_[OV][24]$`
+                                with = `` ).
+      INSERT stripped INTO TABLE result.
+    ENDLOOP.
+  ENDMETHOD.
+
+  METHOD quoted_list.
+    result = concat_lines_of( table = VALUE string_table( FOR name IN names ( cl_abap_dyn_prg=>quote( name ) ) )
+                              sep   = `, ` ).
+    IF result IS INITIAL.
+      result = `' '`.
+    ENDIF.
+  ENDMETHOD.
+
+  METHOD source_lines.
+    DATA lines_of_source TYPE string_table.
+
+    DATA(program) = CONV programm( include ).
+    READ REPORT program INTO lines_of_source.
+    IF sy-subrc <> 0.
+      output->add( subject = subject
+                   item    = lcl_output=>label-missing
+                   content = include ).
+      RETURN.
+    ENDIF.
+    LOOP AT lines_of_source INTO DATA(source_line) WHERE table_line CS pattern.
+      output->add( subject = subject
+                   item    = |{ include } line { sy-tabix }|
+                   content = condense( source_line ) ).
+    ENDLOOP.
+  ENDMETHOD.
+
+  METHOD method_of_include.
+    DATA(service) = catalog->object_descriptor( class_service ).
+    IF service IS NOT BOUND OR NOT line_exists( service->methods[ name = method_by_include ] ).
+      result = |{ class_service }=>{ method_by_include } { lcl_output=>label-missing }|.
+      RETURN.
+    ENDIF.
+
+    DATA(parameters) = include_parameters( descriptor = service
+                                           include    = include ).
+    TRY.
+        CALL METHOD (class_service)=>(method_by_include) PARAMETER-TABLE parameters.
+        result = returned_text( parameters ).
+      CATCH cx_root INTO DATA(failure).
+        result = failure->get_text( ).
+    ENDTRY.
+  ENDMETHOD.
+
+  METHOD include_parameters.
+    DATA(signature) = descriptor->methods[ name = method_by_include ].
+    LOOP AT signature-parameters REFERENCE INTO DATA(parameter).
+      DATA(value) = parameter_data( descriptor  = descriptor
+                                    method_name = signature-name
+                                    parameter   = parameter->name ).
+      IF parameter->parm_kind = cl_abap_objectdescr=>importing AND value IS BOUND.
+        ASSIGN value->* TO FIELD-SYMBOL(<input>).
+        IF sy-subrc = 0.
+          <input> = include.
+        ENDIF.
+      ENDIF.
+      INSERT VALUE #( name  = parameter->name
+                      kind  = caller_kind( parameter->parm_kind )
+                      value = value ) INTO TABLE result.
+    ENDLOOP.
+  ENDMETHOD.
+
+  METHOD parameter_data.
+    DATA parameter_type TYPE REF TO cl_abap_datadescr.
+
+    descriptor->get_method_parameter_type( EXPORTING  p_method_name    = method_name
+                                                      p_parameter_name = parameter
+                                           RECEIVING  p_descr_ref      = parameter_type
+                                           EXCEPTIONS OTHERS           = 1 ).
+    IF sy-subrc <> 0.
+      RETURN.
+    ENDIF.
+    CREATE DATA result TYPE HANDLE parameter_type.
+  ENDMETHOD.
+
+  METHOD caller_kind.
+    " the parameter table names the kind as seen from the caller
+    result = SWITCH #( kind
+                       WHEN cl_abap_objectdescr=>importing THEN cl_abap_objectdescr=>exporting
+                       WHEN cl_abap_objectdescr=>exporting THEN cl_abap_objectdescr=>importing
+                       WHEN cl_abap_objectdescr=>returning THEN cl_abap_objectdescr=>receiving
+                       ELSE kind ).
+  ENDMETHOD.
+
+  METHOD returned_text.
+    LOOP AT parameters REFERENCE INTO DATA(parameter)
+         WHERE kind = cl_abap_objectdescr=>receiving OR kind = cl_abap_objectdescr=>importing.
+      ASSIGN parameter->value->* TO FIELD-SYMBOL(<value>).
+      IF sy-subrc <> 0.
+        CONTINUE.
+      ENDIF.
+      result = |{ result }{ parameter->name }: { value_text( <value> ) } |.
+    ENDLOOP.
+  ENDMETHOD.
+
+  METHOD value_text.
+    DATA(value_type) = cl_abap_typedescr=>describe_by_data( value ).
+    IF value_type->kind <> cl_abap_typedescr=>kind_struct.
+      result = |{ value }|.
+      RETURN.
+    ENDIF.
+    DATA(components) = CAST cl_abap_structdescr( value_type )->components.
+    LOOP AT components REFERENCE INTO DATA(component).
+      ASSIGN COMPONENT component->name OF STRUCTURE value TO FIELD-SYMBOL(<component>).
+      IF sy-subrc = 0.
+        result = |{ result }{ component->name }={ <component> } |.
+      ENDIF.
+    ENDLOOP.
+  ENDMETHOD.
+
+ENDCLASS.
+
+*&----------------------------------------------------------------------*
 *&CLASS lcl_application IMPLEMENTATION
 *&----------------------------------------------------------------------*
 CLASS lcl_application IMPLEMENTATION.
@@ -2332,7 +3286,7 @@ CLASS lcl_application IMPLEMENTATION.
     sc_cnote = 'SAP Notes to look up in CWBNTCUST (S_NOTE):'.
     sc_tatc  = 'A - ATC results'.
     sc_catc  = 'Read ATC objects, APIs and result tables'.
-    sc_cres  = 'DISPLAY_ID of an ATC run (P_RESID), used by A and D - empty: newest'.
+    sc_cres  = 'DISPLAY_ID of an ATC run (P_RESID), used by A, D and F'.
     sc_cmsg  = 'Create the check classes of that run to read their message catalog'.
     sc_tusg  = 'B - SUSG usage data'.
     sc_cusg  = 'Read SUSG objects, APIs and aggregated usage tables'.
@@ -2341,11 +3295,8 @@ CLASS lcl_application IMPLEMENTATION.
     sc_cchkv = 'Check variant (P_CHKV) - with P_RESID empty: its newest run'.
     sc_tchk  = 'E - checks of the variant, class categories, exemptions (0.2)'.
     sc_cchk  = 'Variant tests and messages, behavior pools, ENHO, exemptions'.
-    sc_cpkp  = 'Package pattern of custom code (P_PKGP), e.g. Z_SALES*'.
-    sc_tout  = 'Output'.
-    sc_crows = 'Sample rows per table (P_ROWS):'.
-    sc_cmask = 'Mask user names in sample rows'.
-    sc_cfile = 'Write the result to this text file as well, F4 to choose (P_FILE):'.
+    sc_cpkp  = 'Package pattern of custom code (P_PKGP), used by E and F, e.g. Z_SALES*'.
+    label_roadmap_and_output( ).
 
     " 3565942 clean core ATC checks, 3627152 their Note Analyzer files, 3679781 modification check,
     " 3568611 mass API for language version and release state, 3605376 findings for key user items
@@ -2356,6 +3307,16 @@ CLASS lcl_application IMPLEMENTATION.
                         ( low = '3679781' )
                         ( low = '3568611' )
                         ( low = '3605376' ) ).
+  ENDMETHOD.
+
+  METHOD label_roadmap_and_output.
+    sc_trdm  = 'F - roadmap 0.4 to 0.6'.
+    sc_croad = 'Run system, changelog, OData usage, RAP, where-used, methods'.
+    sc_cusid = 'Usage data set USGID (P_USGID) - empty: the local data set'.
+    sc_tout  = 'Output'.
+    sc_crows = 'Sample rows per table (P_ROWS):'.
+    sc_cmask = 'Mask user names in sample rows'.
+    sc_cfile = 'Write the result to this text file as well, F4 to choose (P_FILE):'.
   ENDMETHOD.
 
   METHOD ask_file_path.
@@ -2433,6 +3394,14 @@ CLASS lcl_application IMPLEMENTATION.
       INSERT CAST lif_probe( NEW lcl_reader_probe( output   = output
                                                    catalog  = catalog
                                                    settings = reader_settings ) ) INTO TABLE result.
+    ENDIF.
+    IF selection-probes_roadmap = abap_true.
+      DATA(roadmap_settings) = VALUE lcl_roadmap_probe=>roadmap_settings( result_id       = selection-result_id
+                                                                          usage_id        = selection-usage_id
+                                                                          package_pattern = selection-code_packages ).
+      INSERT CAST lif_probe( NEW lcl_roadmap_probe( output   = output
+                                                    catalog  = catalog
+                                                    settings = roadmap_settings ) ) INTO TABLE result.
     ENDIF.
   ENDMETHOD.
 
